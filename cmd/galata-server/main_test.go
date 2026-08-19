@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mehmetb/galata-dergisi/internal/application"
-	"github.com/mehmetb/galata-dergisi/internal/site"
+	"github.com/galata-dergisi/galata-dergisi/internal/application"
+	"github.com/galata-dergisi/galata-dergisi/internal/site"
 )
 
 func TestProductionEnvironmentFileDiscoveryAndPrecedence(t *testing.T) {

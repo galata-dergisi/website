@@ -24,9 +24,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mehmetb/galata-dergisi/internal/application"
-	"github.com/mehmetb/galata-dergisi/internal/contributions"
-	"github.com/mehmetb/galata-dergisi/internal/site"
+	"github.com/galata-dergisi/galata-dergisi/internal/application"
+	"github.com/galata-dergisi/galata-dergisi/internal/contributions"
+	"github.com/galata-dergisi/galata-dergisi/internal/site"
 )
 
 const developmentCaptchaToken = "galata-development"
