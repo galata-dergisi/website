@@ -25,7 +25,7 @@ jobs:
     environment: ${{ inputs.target }}
     steps:
       - name: Checkout selected main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -51,7 +51,7 @@ jobs:
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Download exact CI artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: galata-server-linux
           path: release
@@ -69,7 +69,7 @@ jobs:
           (cd release && sha256sum -c SHA256SUMS)
 
       - name: Checkout immutable media commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: galata-dergisi/static-assets
           ref: ${{ steps.provenance.outputs.static_commit }}

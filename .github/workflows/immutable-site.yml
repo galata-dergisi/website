@@ -13,16 +13,16 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: galata-dergisi/static-assets
           path: .static-assets
           token: ${{ secrets.STATIC_ASSETS_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -70,7 +70,7 @@ jobs:
       - name: Run native page-turn browser parity tests
         run: npm run test:page-turn
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: .go-version
           cache: false
@@ -99,7 +99,7 @@ jobs:
       - name: Scan releases for private database values
         run: node scripts/scan-release.js release/galata-server-linux-amd64 release/galata-server-linux-arm64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: galata-server-linux
           path: |
