@@ -2,7 +2,7 @@
   "name": "galata-dergisi",
   "description": "https://galatadergisi.org",
   "author": "Mehmet Baker <mehmet@mehmetbaker.dev> (https://mehmetbaker.dev)",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "svelte": "^5.56.8"
