@@ -23,7 +23,7 @@
 
 <style>
   footer {
-    font-family: "Playfair Display", serif;
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     font-size: 13px;
     font-style: normal;
     text-align: center;

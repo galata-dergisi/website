@@ -1,0 +1,16 @@
+.git
+.github
+.DS_Store
+.env*
+build
+client/audio
+contributions
+database-exports
+internal/site/dist
+node_modules
+public
+release
+server
+uploads
+zap-reports
+*.log

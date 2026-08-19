@@ -19,52 +19,97 @@
 
 <script>
   import { onMount, tick } from 'svelte';
+  import {
+    acceptedFileTypes,
+    fileMatchesAssetType,
+  } from '../../lib/contribution-file-policy.mjs';
 
   // 50 MB
   const MAX_FILE_SIZE = 1024 * 1024 * 50;
+  const development = Boolean(window.galataDevelopment);
 
-  let assetType;
-  let darkMode = false;
+  let assetType = $state();
+  let darkMode = $state(false);
+  let submitting = $state(false);
 
   // DOM Elements
-  let form;
-  let fileInput;
-  let fileInputText;
-  let submitButton;
-  let assetTypeInput;
+  let form = $state();
+  let fileInput = $state();
+  let fileInputText = $state();
+  let assetTypeInput = $state();
 
-  const MIME_TYPES = {
-    text: 'text/plain, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.oasis.opendocument.text, application/rtf, .txt, .pdf, .doc, .docx, .odt, .rtf',
-    image: 'image/*, .png, .jpg, .jpeg, .bmp, .tiff, .tif',
-    audio: 'audio/*, .mp3, .ogg',
-  };
+  function resetTurnstile() {
+    if (!development && window.turnstile) window.turnstile.reset();
+  }
 
-  const ASSET_MIMES = {
-    siir: 'text',
-    oyku: 'text',
-    deneme: 'text',
-    roportaj: 'text',
-    elestiri: 'text',
-    resim: 'image',
-    ses: 'audio',
-  };
+  function syncAssetTypeOptions(instance) {
+    const menu = document.getElementById(instance.input.dataset.target);
+    if (!menu) return;
+    menu.setAttribute('role', 'listbox');
+    menu.querySelectorAll('li').forEach((option) => {
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', String(option.classList.contains('selected')));
+      if (option.classList.contains('disabled')) option.setAttribute('aria-disabled', 'true');
+    });
+  }
 
-  async function onButtonClick() {
+  function initializeAssetTypeSelect() {
+    const existing = M.FormSelect.getInstance(assetTypeInput);
+    if (existing) existing.destroy();
+
+    let trigger;
+    const instance = M.FormSelect.init(assetTypeInput, {
+      dropdownOptions: {
+        onOpenStart: () => trigger.setAttribute('aria-expanded', 'true'),
+        onCloseEnd: () => trigger.setAttribute('aria-expanded', 'false'),
+      },
+    });
+    trigger = instance.input;
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-labelledby', 'assetTypeLabel');
+    trigger.setAttribute('aria-controls', trigger.dataset.target);
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-required', 'true');
+    syncAssetTypeOptions(instance);
+    return instance;
+  }
+
+  async function resetForm() {
+    form.reset();
+    assetType = '';
+    await tick();
+
+    initializeAssetTypeSelect();
+    M.updateTextFields();
+  }
+
+  async function onSubmit(event) {
+    event.preventDefault();
+    if (submitting) return;
+
     form.reportValidity();
 
     if (form.checkValidity()) {
       const formData = new FormData(form);
+      if (development) {
+        formData.set(
+          'cf-turnstile-response',
+          window.galataDevelopment.captchaToken,
+        );
+      }
 
       if (!formData.get('assetType')) {
         const { input } = M.FormSelect.getInstance(assetTypeInput);
         input.readOnly = false;
         input.setCustomValidity('Lütfen Eser Türü seçimi yapınız.');
+        input.setAttribute('aria-invalid', 'true');
         input.reportValidity();
         input.readOnly = true;
         return;
       }
 
-      if (formData.get('g-recaptcha-response') === '') {
+      if (!formData.get('cf-turnstile-response')) {
         M.toast({
           html: 'Lütfen güvenlik doğrulamasını tamamlayınız.',
           classes: 'yellow darken-4',
@@ -72,6 +117,7 @@
         return;
       }
 
+      submitting = true;
       try {
         const response = await fetch('/katkida-bulunun', {
           method: 'POST',
@@ -79,9 +125,9 @@
         });
         const result = await response.json();
 
-        if (!result.success) {
+        if (!result.ok) {
           M.toast({
-            html: result.error,
+            html: result.message,
             classes: 'red darken-3',
           });
           return;
@@ -92,44 +138,29 @@
           classes: 'teal darken-3',
         });
 
-        form.reset();
+        await resetForm();
       } catch (ex) {
         console.trace(ex);
         M.toast({
           html: 'Beklenmedik bir hata oluştu, lütfen sayfayı yenileyip tekrar deneyin.',
           classes: 'red darken-3',
         });
+      } finally {
+        resetTurnstile();
+        submitting = false;
       }
     }
   }
 
-  function ensureFileMimeMatchesAssetType() {
+  function ensureFileMatchesAssetType() {
+    if (!fileInput) return;
     const assetTypeEmpty = !assetType;
     const videoAsset = assetType === 'video';
-    let fileMimeMatchesAssetMime = false;
+    const fileMatches = !videoAsset
+      && fileInput.files.length
+      && fileMatchesAssetType(fileInput.files[0], assetType);
 
-    if (!videoAsset && fileInput.files.length) {
-      const fileMime = fileInput.files[0].type;
-      const regexpString = MIME_TYPES[ASSET_MIMES[assetType]]
-        .replace(/\s/g, '')
-        .split(',')
-        .map((assetMime) => {
-          if (/^\./.test(assetMime)) {
-            assetMime += '$';
-          }
-
-          return assetMime
-            .replace('*', '.+')
-            .replace('.', '\\.')
-            .replace('/', '\\/');
-        })
-        .join('|');
-
-      const regexp = new RegExp(regexpString);
-      fileMimeMatchesAssetMime = regexp.test(fileMime);
-    }
-
-    if (assetTypeEmpty || videoAsset || !fileMimeMatchesAssetMime) {
+    if (assetTypeEmpty || videoAsset || !fileMatches) {
       fileInput.value = '';
       fileInputText.value = '';
       fileInputText.classList.remove('valid');
@@ -137,20 +168,30 @@
     }
   }
 
-  function onAssetTypeChange() {
+  async function onAssetTypeChange() {
+    let instance = null;
     if (assetTypeInput.value) {
-      const { input } = M.FormSelect.getInstance(assetTypeInput);
+      instance = M.FormSelect.getInstance(assetTypeInput);
+      const { input } = instance;
       input.setCustomValidity('');
+      input.removeAttribute('aria-invalid');
     }
 
-    ensureFileMimeMatchesAssetType();
+    ensureFileMatchesAssetType();
+    if (instance) {
+      await tick();
+      syncAssetTypeOptions(instance);
+    }
   }
 
   if (window.matchMedia) {
-    darkMode = matchMedia('(prefers-color-scheme: dark').matches;
+    darkMode = matchMedia('(prefers-color-scheme: dark)').matches;
   }
 
-  onMount(M.AutoInit);
+  onMount(() => {
+    M.AutoInit();
+    initializeAssetTypeSelect();
+  });
 </script>
 
 <style>
@@ -184,10 +225,6 @@
     margin-top: 0;
   }
 
-  input[type=submit] {
-    visibility: hidden;
-  }
-
   .page-container {
     width: 100%;
     height: 100%;
@@ -196,6 +233,11 @@
 
   .container {
     background: #eee;
+  }
+
+  :global(.file-field .btn:has(input[type='file']:focus-visible)) {
+    outline: 3px solid #004d40;
+    outline-offset: 3px;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -245,6 +287,16 @@
       border-bottom: 1px solid #d9bb45 !important;
       box-shadow: 0 1px 0 0 #d9bb45 !important;
     }
+
+    :global(.file-field .btn:has(input[type='file']:focus-visible)) {
+      outline-color: #fff;
+    }
+  }
+
+  @media (forced-colors: active) {
+    :global(.file-field .btn:has(input[type='file']:focus-visible)) {
+      outline-color: Highlight;
+    }
   }
 </style>
 
@@ -253,7 +305,18 @@
     <h3 class="center-align">Katkıda Bulunun</h3>
 
     <div class="row">
-      <form class="col s12" on:submit|preventDefault bind:this={form}>
+      <form class="col s12" onsubmit={onSubmit} bind:this={form}>
+        <div hidden>
+          <label for="contactWebsite">Web sitesi</label>
+          <input
+            type="text"
+            id="contactWebsite"
+            name="contactWebsite"
+            autocomplete="off"
+            tabindex="-1"
+          />
+        </div>
+
         <div class="row">
           <div class="input-field col s12">
             <input type="text" id="name" name="name" maxlength="40" class="validate" required />
@@ -291,7 +354,7 @@
               bind:this={assetTypeInput}
               name="assetType"
               id="assetType"
-              on:change={onAssetTypeChange}
+              onchange={onAssetTypeChange}
               >
               <option value="" disabled="disabled" selected="selected">Seçiniz...</option>
               <option value="siir">Şiir</option>
@@ -303,7 +366,7 @@
               <option value="ses">Ses</option>
               <option value="video">Video</option>
             </select>
-            <label for="assetType">Eser Türü</label>
+            <label id="assetTypeLabel" for="assetType">Eser Türü</label>
           </div>
         </div>
 
@@ -334,18 +397,19 @@
                 <span>Dosya</span>
                 <input
                   bind:this={fileInput}
-                  on:change={(e) => {
-                    if (e.target.files.length && e.target.files[0].size >= MAX_FILE_SIZE) {
-                      e.target.setCustomValidity("Lütfen 100 MB'den küçük bir dosya seçiniz.");
-                      e.target.reportValidty();
+                  onchange={(e) => {
+                    if (e.target.files.length && e.target.files[0].size > MAX_FILE_SIZE) {
+                      e.target.setCustomValidity("Lütfen 50 MiB'den küçük veya eşit bir dosya seçiniz.");
+                      e.target.reportValidity();
                     } else {
                       e.target.setCustomValidity('');
                     }
                   }}
                   type="file"
                   name="file"
+                  aria-label="Dosya seç"
                   required="required"
-                  accept={assetType === 'video' ? '' : MIME_TYPES[ASSET_MIMES[assetType]]} />
+                  accept={acceptedFileTypes(assetType)} />
               </div>
               <div class="file-path-wrapper">
                 <input bind:this={fileInputText} class="file-path validate" type="text" placeholder="Dosya seçiniz." />
@@ -354,17 +418,28 @@
           </div>
         {/if}
 
-        <div
-          class="g-recaptcha"
-          data-theme="{darkMode ? 'dark' : 'light'}"
-          data-sitekey="6LcNcPYSAAAAACo24ipu3YWTwaLflO1gUDSg4ld1"
-        ></div>
+        {#if development}
+          <div class="card-panel amber lighten-4 brown-text text-darken-4">
+            Geliştirme modu: CAPTCHA devre dışıdır. Bu gönderi yalnızca yerel
+            contributions gelen kutusuna kaydedilecektir.
+          </div>
+        {:else}
+          <div
+            class="cf-turnstile"
+            data-theme="{darkMode ? 'dark' : 'light'}"
+            data-sitekey="0x4AAAAAAEFQTSL_Bceyu_qG"
+            data-language="tr"
+            data-action="contribution"
+          ></div>
+        {/if}
 
         <br />
 
-        <button type="button" class="btn waves-effect waves-light" on:click={onButtonClick}>Gönder</button>
-
-        <input type="submit" bind:this={submitButton} />
+        <button
+          type="submit"
+          class="btn waves-effect waves-light"
+          disabled={submitting}
+        >Gönder</button>
       </form>
     </div>
   </div>

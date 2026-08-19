@@ -1,0 +1,102 @@
+name: Deploy immutable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment slot
+        required: true
+        type: choice
+        options:
+          - dev
+          - production
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: galata-vps-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Checkout selected main commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require successful exact-SHA Immutable site run
+        id: immutable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          run_id=$(
+            gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/immutable-site.yml/runs" \
+              -f branch=main -f status=success -f per_page=100 \
+              --jq ".workflow_runs[] | select(.head_sha == \"$SELECTED_SHA\" and .conclusion == \"success\") | .id" \
+              | head -1
+          )
+          test -n "$run_id" || {
+            echo "No successful Immutable site run exactly matches $SELECTED_SHA" >&2
+            exit 1
+          }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact CI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: galata-server-linux
+          path: release
+          run-id: ${{ steps.immutable.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate artifact provenance
+        id: provenance
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^application_commit=//p' release/RELEASE-MANIFEST)" = "$GITHUB_SHA"
+          static_commit=$(sed -n 's/^static_assets_commit=//p' release/RELEASE-MANIFEST)
+          printf '%s' "$static_commit" | grep -Eq '^[0-9a-f]{40}$'
+          echo "static_commit=$static_commit" >> "$GITHUB_OUTPUT"
+          (cd release && sha256sum -c SHA256SUMS)
+
+      - name: Checkout immutable media commit
+        uses: actions/checkout@v4
+        with:
+          repository: galata-dergisi/static-assets
+          ref: ${{ steps.provenance.outputs.static_commit }}
+          path: .static-assets
+          token: ${{ secrets.STATIC_ASSETS_TOKEN }}
+          persist-credentials: false
+
+      - name: Install restricted SSH identity
+        env:
+          DEPLOY_KEY: ${{ secrets.GALATA_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GALATA_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/galata-ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/galata-ssh/deploy-key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/galata-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/galata-ssh/deploy-key" "$RUNNER_TEMP/galata-ssh/known_hosts"
+
+      - name: Deploy prebuilt release
+        env:
+          GALATA_DEPLOY_HOST: ${{ secrets.GALATA_DEPLOY_HOST }}
+          GALATA_DEPLOY_PORT: ${{ secrets.GALATA_DEPLOY_PORT }}
+          GALATA_DEPLOY_SSH_KEY_PATH: ${{ runner.temp }}/galata-ssh/deploy-key
+          GALATA_SSH_KNOWN_HOSTS_FILE: ${{ runner.temp }}/galata-ssh/known_hosts
+        run: |
+          ./ops/deploy-server.sh deploy "${{ inputs.target }}" \
+            --release-dir release \
+            --media-root .static-assets/server-assets/public \
+            --yes
+          ./ops/deploy-server.sh verify "${{ inputs.target }}"

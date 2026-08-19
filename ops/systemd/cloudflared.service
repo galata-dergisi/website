@@ -1,0 +1,41 @@
+[Unit]
+Description=Cloudflare Tunnel connector for Galata Dergisi
+Wants=network-online.target nginx.service
+After=network-online.target nginx.service
+ConditionPathExists=/etc/cloudflared/tunnel-token
+
+[Service]
+Type=notify
+DynamicUser=yes
+LoadCredential=tunnel-token:/etc/cloudflared/tunnel-token
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 run --token-file %d/tunnel-token
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

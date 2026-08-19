@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>PageTurn parity fixture</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 1200px; height: 800px; overflow: hidden; background: #ddd; }
+      #magazine { margin: 0; width: 1000px; height: 700px; }
+      .page { border: 0; }
+      .p1, .p6 { background: #20304a; }
+      .p2, .p7 { background: #d2a978; }
+      .p3, .p8 { background: #6f8c7a; }
+      .p4, .p9 { background: #a26c67; }
+      .p5, .p10 { background: #e6dfcf; }
+      .shadow { position: absolute; inset: 0; pointer-events: none; box-shadow: 0 4px 18px rgba(0, 0, 0, .45); }
+      .shadow.partial-hidden.left { clip-path: inset(0 0 0 50%); }
+      .shadow.partial-hidden.right { clip-path: inset(0 50% 0 0); }
+      .shadow.partial-hidden.first { clip-path: inset(0 0 0 50%); }
+      .shadow.partial-hidden.last { clip-path: inset(0 50% 0 0); }
+      .fixture-player-controls { position: absolute; right: 0; bottom: 50px; z-index: 100; width: 230px; height: 50px; }
+      .fixture-player-range { appearance: none; width: 230px; height: 50px; margin: 0; opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="magazine"></div>
+    <script>
+      window.addEventListener('error', (event) => {
+        window.pageTurnError = event.error?.stack || event.message;
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        window.pageTurnError = event.reason?.stack || String(event.reason);
+      });
+    </script>
+    <script type="module">
+      import { createAudioPlayerViewManager } from '/client/lib/audio-player-view-manager.mjs';
+      import { PageTurn } from '/client/lib/page-turn.mjs';
+
+      const root = document.getElementById('magazine');
+      let engine;
+      let events;
+      let audioViewManager;
+      let audioState;
+      let audioMountCalls;
+      let audioUnmountCalls;
+      let playerControlInputEvents;
+      let playerControlGestureStarts;
+      let playerControlMoveEvents;
+
+      function addPlayerControl(element, pageNumber) {
+        const container = document.createElement('div');
+        container.className = 'fixture-player-controls';
+        container.dataset.pageTurnGestureBoundary = '';
+        const countPlayerGesture = () => {
+          playerControlGestureStarts += 1;
+        };
+        container.addEventListener('mousedown', countPlayerGesture);
+        container.addEventListener('touchstart', countPlayerGesture);
+        container.addEventListener('mousemove', () => {
+          playerControlMoveEvents += 1;
+        });
+
+        const range = document.createElement('input');
+        range.className = 'fixture-player-range';
+        range.type = 'range';
+        range.min = '0';
+        range.max = '1000';
+        range.step = '1';
+        range.value = '0';
+        range.dataset.fixturePlayerPage = String(pageNumber);
+        range.addEventListener('input', () => {
+          playerControlInputEvents += 1;
+        });
+        container.append(range);
+        element.append(container);
+      }
+
+      function addRange(page, currentEngine = engine) {
+        const [start, end] = currentEngine.range(page);
+        for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+          if (currentEngine.hasPage(pageNumber)) continue;
+          const element = document.createElement('div');
+          element.className = 'page';
+          element.dataset.fixturePage = String(pageNumber);
+          if (pageNumber === 1) addPlayerControl(element, pageNumber);
+          if (pageNumber === 4) {
+            const mountPoint = document.createElement('div');
+            mountPoint.dataset.audioPlayerId = 'fixture-player';
+            element.append(mountPoint);
+          }
+          currentEngine.addPage(pageNumber, element);
+          audioViewManager.mountWithin(element);
+        }
+      }
+
+      function createEngine(page = 1) {
+        if (audioViewManager) audioViewManager.dispose();
+        if (engine) engine.destroy();
+        events = [];
+        audioState = { currentTime: 0 };
+        audioMountCalls = 0;
+        audioUnmountCalls = 0;
+        playerControlInputEvents = 0;
+        playerControlGestureStarts = 0;
+        playerControlMoveEvents = 0;
+        audioViewManager = createAudioPlayerViewManager({
+          root,
+          playersById: new Map([['fixture-player', { id: 'fixture-player' }]]),
+          createView(target) {
+            audioMountCalls += 1;
+            const element = document.createElement('span');
+            element.hidden = true;
+            element.dataset.fixtureAudioView = '';
+            element.textContent = String(audioState.currentTime);
+            target.append(element);
+            return element;
+          },
+          destroyView(view) {
+            audioUnmountCalls += 1;
+            view.remove();
+          },
+        });
+        engine = new PageTurn(root, {
+          pageCount: 10,
+          width: 1000,
+          height: 700,
+          duration: 600,
+          elevation: 50,
+          onTurning(event, nextPage, view, currentEngine) {
+            events.push(['turning', nextPage, [...view]]);
+            addRange(nextPage, currentEngine);
+          },
+          onTurned(event, nextPage, view) {
+            events.push(['turned', nextPage, [...view]]);
+            audioViewManager.reconcile();
+          },
+        });
+        addRange(page);
+        engine.goToPage(page);
+      }
+
+      function snapshot() {
+        const wrappers = [...root.querySelectorAll(':scope > .turn-page-wrapper')]
+          .sort((left, right) => Number(left.getAttribute('page')) - Number(right.getAttribute('page')));
+        const foldParent = [...root.children].find((element) => element.style.pointerEvents === 'none');
+        const playerControl = root.querySelector('.fixture-player-range');
+        const playerControlRect = playerControl?.getBoundingClientRect();
+        const transformed = [...root.querySelectorAll('*')]
+          .filter((element) => element.style.transform || element.style.webkitTransform)
+          .map((element) => ({
+            className: element.className,
+            page: element.getAttribute('page'),
+            transform: getComputedStyle(element).transform,
+            transformOrigin: getComputedStyle(element).transformOrigin,
+            zIndex: getComputedStyle(element).zIndex,
+          }));
+        const gradients = [...root.querySelectorAll('*')]
+          .map((element) => getComputedStyle(element).backgroundImage)
+          .filter((value) => value !== 'none');
+
+        return {
+          bufferedPages: wrappers.map((element) => Number(element.getAttribute('page'))),
+          pageElements: root.querySelectorAll('.turn-page').length,
+          visiblePages: wrappers
+            .filter((element) => getComputedStyle(element).display !== 'none')
+            .map((element) => Number(element.getAttribute('page'))),
+          wrappers: wrappers.map((element) => ({
+            page: Number(element.getAttribute('page')),
+            display: getComputedStyle(element).display,
+            left: getComputedStyle(element).left,
+            right: getComputedStyle(element).right,
+            zIndex: getComputedStyle(element).zIndex,
+          })),
+          foldDisplay: foldParent ? getComputedStyle(foldParent).display : null,
+          foldChildren: foldParent ? foldParent.childElementCount : 0,
+          gradients,
+          transformed,
+          shadowClass: root.querySelector(':scope > .shadow')?.className || null,
+          events: structuredClone(events),
+          childCount: root.childElementCount,
+          globals: { dollar: typeof window.$, jquery: typeof window.jQuery },
+          audioViews: root.querySelectorAll('[data-fixture-audio-view]').length,
+          audioMountedViews: audioViewManager?.getMountedCount() || 0,
+          audioMountCalls,
+          audioUnmountCalls,
+          audioViewText: root.querySelector('[data-fixture-audio-view]')?.textContent || null,
+          playerControlValue: Number(playerControl?.value || 0),
+          playerControlInputEvents,
+          playerControlGestureStarts,
+          playerControlMoveEvents,
+          playerControlRect: playerControlRect ? {
+            left: playerControlRect.left,
+            top: playerControlRect.top,
+            width: playerControlRect.width,
+            height: playerControlRect.height,
+          } : null,
+        };
+      }
+
+      window.pageTurnFixture = {
+        createEngine,
+        destroy() {
+          audioViewManager.dispose();
+          engine.destroy();
+        },
+        go(page) { addRange(page); engine.goToPage(page); },
+        addOverlayPlayerControl() {
+          addPlayerControl(root, 'overlay');
+        },
+        setAudioTime(value) {
+          audioState.currentTime = Number(value);
+          const view = root.querySelector('[data-fixture-audio-view]');
+          if (view) view.textContent = String(audioState.currentTime);
+        },
+        snapshot,
+      };
+      createEngine(1);
+      window.pageTurnReady = true;
+    </script>
+  </body>
+</html>

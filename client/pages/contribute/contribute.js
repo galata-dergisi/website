@@ -18,8 +18,9 @@
 */
 
 import Contribute from './Contribute.svelte';
+import { mount } from 'svelte';
 
-const contribute = new Contribute({
+const contribute = mount(Contribute, {
   target: document.body,
 });
 

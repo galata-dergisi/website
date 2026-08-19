@@ -18,10 +18,33 @@
   -->
 
 <script>
-  export let direction = "left";
-  export let disabled = false;
-  import { createEventDispatcher } from 'svelte';
-  const dispatch = createEventDispatcher();
+  import { shouldHandleDirectionalNavigation } from '../../../lib/link-navigation.mjs';
+
+  let {
+    direction = 'left',
+    disabled = false,
+    onClick = () => {},
+    onNavigate = () => {},
+  } = $props();
+  let navigationLabel = $derived(
+    direction === 'right'
+      ? 'Dergi listesini sağa kaydır'
+      : 'Dergi listesini sola kaydır',
+  );
+
+  function activate() {
+    if (!disabled) onClick();
+  }
+
+  function handlePointerDown(event) {
+    if (disabled) event.preventDefault();
+  }
+
+  function handleKeyDown(event) {
+    if (!shouldHandleDirectionalNavigation(event)) return;
+    event.preventDefault();
+    onNavigate({ direction: event.key === 'ArrowLeft' ? -1 : 1 });
+  }
 </script>
 
 <style>
@@ -38,17 +61,54 @@
     fill: url(#normalGrad);
   }
 
-  polygon:hover {
+  button {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    display: block;
+    font: inherit;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    -webkit-user-select: none;
+    user-select: none;
+    width: 100%;
+  }
+
+  svg {
+    display: block;
+    height: 100%;
+    width: 100%;
+  }
+
+  button:enabled polygon:hover {
     cursor: pointer;
     fill: url(#hoverGrad);
-  } 
+  }
+
+  button:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+
+  button:focus-visible polygon {
+    stroke: rgba(105, 129, 69, 0.6);
+    stroke-width: 6px;
+    stroke-linejoin: round;
+  }
+
+  @media (forced-colors: active) {
+    button:focus-visible {
+      outline: none;
+    }
+
+    button:focus-visible polygon {
+      stroke: Highlight;
+    }
+  }
 
   div.disabled polygon {
     fill: #d5d5d5;
-  }
-
-  div.disabled a {
-    pointer-events: none;
   }
 </style>
 
@@ -56,25 +116,27 @@
   class:disabled
   class:right={direction === 'right'}
   class:left={direction === 'left'}>
-  <svg viewbox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="normalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" style="stop-color:#aaa;stop-opacity:1" />
-        <stop offset="100%" style="stop-color:#797979;stop-opacity:1" />
-      </linearGradient>
-      
-      <linearGradient id="hoverGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" style="stop-color:#aaa;stop-opacity:1" />
-        <stop offset="100%" style="stop-color:#515151;stop-opacity:1" />
-      </linearGradient>
-    </defs>
-      <a 
-        href="#!"
-        title="Slide carousel to {direction}"
-        on:click|preventDefault={() => dispatch('click')}
-        >
-          <polygon 
-            points="200,0 200,200 0,100" />
-        </a>
-  </svg> 
+  <button
+    type="button"
+    title={navigationLabel}
+    aria-label={navigationLabel}
+    {disabled}
+    onpointerdown={handlePointerDown}
+    onclick={activate}
+    onkeydown={handleKeyDown}>
+    <svg viewbox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="normalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#aaa;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#797979;stop-opacity:1" />
+        </linearGradient>
+
+        <linearGradient id="hoverGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#aaa;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#515151;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <polygon points="200,0 200,200 0,100" />
+    </svg>
+  </button>
 </div>

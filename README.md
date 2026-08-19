@@ -4,6 +4,21 @@
 
 Source code of https://galatadergisi.org.
 
+## Public content and SEO
+
+See [the public-content and SEO guide](docs/public-content.md) for the canonical
+public catalog, server-rendered reader, contributor profiles, and sitemap.
+
+The production design is documented in the
+[immutable-site architecture](docs/immutable-site-architecture.md) and
+[operations runbook](docs/immutable-site-operations.md). Node and Svelte are
+build-only tools; the production application is a standard-library Go server
+with a private atomic filesystem inbox for new contributions.
+
+For a watched local frontend, generated site, Go server, local media, and
+private development inbox, see the
+[full-stack development guide](docs/development.md) and run `npm run dev`.
+
 ## Contributing to galata-dergisi
 
 * If you want to report an issue or request a new feature then please [create an issue](https://github.com/mehmetb/galata-dergisi/issues).

@@ -15,11 +15,78 @@
 // You should have received a copy of the GNU General Public License
 // along with galata-dergisi. If not, see <https://www.gnu.org/licenses/>.
 
-import '../../vendor/turnjs/turn.js';
+import { hydrate, mount } from 'svelte';
 import HomePage from './HomePage.svelte';
+import {
+  READER_CACHE_WARM_GRACE_MS,
+  shouldWarmReaderCache,
+} from '../../lib/reader-cache-policy.mjs';
 
-const homePage = new HomePage({
-  target: document.body,
+function registerServiceWorkerAfterLoad() {
+  if (!('serviceWorker' in navigator) || window.galataDevelopment) return;
+
+  const register = async () => {
+    try {
+      await navigator.serviceWorker.register('/service-worker.js');
+      const registration = await navigator.serviceWorker.ready;
+      const warm = () => {
+        const connection = navigator.connection
+          || navigator.mozConnection
+          || navigator.webkitConnection
+          || null;
+        if (!shouldWarmReaderCache({
+          online: navigator.onLine,
+          connection,
+        })) return;
+        const worker = registration.active || navigator.serviceWorker.controller;
+        if (worker) worker.postMessage({ type: 'WARM_READER_CACHE' });
+      };
+      window.setTimeout(() => {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(warm, { timeout: 10_000 });
+        } else {
+          warm();
+        }
+      }, READER_CACHE_WARM_GRACE_MS);
+    } catch (error) {
+      console.warn('Service worker registration failed.', error);
+    }
+  };
+
+  if (document.readyState === 'complete') void register();
+  else window.addEventListener('load', () => void register(), { once: true });
+}
+
+const target = document.getElementById('app');
+const bootstrapElement = document.getElementById('galata-bootstrap');
+let bootstrap = {};
+
+try {
+  bootstrap = JSON.parse(bootstrapElement ? bootstrapElement.textContent : '{}');
+} catch (error) {
+  console.trace(error);
+}
+
+if (!bootstrap.hydratable) {
+  target.innerHTML = '';
+}
+
+registerServiceWorkerAfterLoad();
+
+const start = bootstrap.hydratable === true ? hydrate : mount;
+const homePage = start(HomePage, {
+  target,
+  props: {
+    initialMagazines: bootstrap.initialMagazines || [],
+    initialMagazineIndex: bootstrap.initialMagazineIndex || null,
+    initialPages: bootstrap.initialPages || null,
+    initialAudioPlayers: bootstrap.initialAudioPlayers || null,
+    initialLandingPage: bootstrap.initialLandingPage || 1,
+    initialWorkStartPage: bootstrap.initialWorkStartPage || null,
+    initialWorkEndPage: bootstrap.initialWorkEndPage || null,
+    initialArtwork: bootstrap.initialArtwork || {},
+    initialHash: window.location.hash,
+  },
 });
 
 export default homePage;

@@ -4,52 +4,48 @@
   "author": "Mehmet Baker <mehmet@mehmetbaker.dev> (https://mehmetbaker.dev)",
   "version": "1.0.0",
   "license": "GPL-3.0-or-later",
-  "devDependencies": {
-    "@rollup/plugin-commonjs": "^11.0.2",
-    "@rollup/plugin-node-resolve": "^7.1.1",
-    "autoprefixer": "^10.3.2",
-    "eslint": "^6.8.0",
-    "eslint-config-airbnb-base": "^14.1.0",
-    "eslint-plugin-import": "^2.20.2",
-    "nodemon": "^2.0.12",
-    "npm-run-all": "^4.1.5",
-    "postcss": "^8.3.6",
-    "rollup": "^2.56.3",
-    "rollup-plugin-copy": "^3.4.0",
-    "rollup-plugin-css-only": "^3.1.0",
-    "rollup-plugin-livereload": "^2.0.5",
-    "rollup-plugin-svelte": "^7.1.0",
-    "rollup-plugin-terser": "^7.0.2",
-    "sass": "^1.38.1",
-    "svelte": "^3.42.3",
-    "svelte-preprocess": "^4.8.0"
-  },
   "dependencies": {
-    "compression": "^1.7.4",
-    "express": "^4.17.1",
-    "googleapis": "^62.0.0",
-    "mariadb": "^2.1.1",
-    "multer": "^1.4.2",
-    "nodemailer": "^6.4.6",
-    "uuid": "^8.0.0"
+    "svelte": "^5.56.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "autoprefixer": "^10.5.4",
+    "chokidar": "^5.0.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-svelte": "^3.22.0",
+    "globals": "^17.9.0",
+    "livereload": "^0.10.3",
+    "postcss": "^8.5.25",
+    "sass": "^1.102.0",
+    "sharp": "^0.35.3",
+    "vite": "^8.2.0"
   },
   "scripts": {
+    "audit": "npm audit --omit=dev --audit-level=moderate",
     "cloc": "cloc --exclude-dir=node_modules,public,sql-backups,uploads,utility-scripts,vendor,.vscode --force-lang=\"HTML\",svelte .",
-    "server": "node server/server.js",
-    "build": "rollup -c",
-    "autobuild": "rollup -c -w",
-    "dev": "run-p start:dev autobuild",
-    "dev-svc": "run-p start:dev-svc autobuild",
-    "lint": "eslint \"client/**/*.js\" \"server/**/*.js\"",
-    "start": "sirv public --single",
-    "start:dev": "nodemon server/server.js --disable-services",
-    "start:dev-svc": "nodemon server/server.js"
-  },
-  "nodemonConfig": {
-    "ignore": [
-      "client/*",
-      "public/*"
-    ]
+    "build": "npm run build:client && npm run generate:site",
+    "build:client": "npm run generate:carousel-sheet && npm run generate:homepage-images && node scripts/build-frontend.mjs",
+    "generate:carousel-sheet": "node scripts/generate-carousel-sheet.mjs",
+    "generate:homepage-images": "node scripts/generate-homepage-images.mjs",
+    "generate:site": "node scripts/generate-site.js",
+    "content:verify": "python3 scripts/verify-public-database.py content/public.sqlite",
+    "verify:runtime-boundary": "node scripts/check-runtime-boundary.js",
+    "verify:page-turn-size": "node scripts/check-page-turn-bundle-size.mjs",
+    "verify:site": "node scripts/verify-generated-site.js",
+    "hash:site": "node scripts/hash-generated-site.js",
+    "dev": "node --env-file-if-exists=.env.development scripts/dev.mjs",
+    "preview:production": "sh scripts/production-preview.sh up",
+    "preview:production:down": "sh scripts/production-preview.sh down",
+    "lint": "eslint \"client/**/*.{js,mjs,svelte}\" \"scripts/**/*.{js,mjs}\" \"tests/**/*.{js,mjs}\" \"*.config.mjs\"",
+    "security:zap": "sh scripts/zap-scan.sh",
+    "security:zap:active": "sh scripts/zap-scan.sh active",
+    "test": "npm run generate:carousel-sheet && node tests/run.js && node --test tests/deploy-server.test.mjs tests/dev-orchestrator.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/scan-release.test.mjs tests/seo-head.test.mjs tests/server-setup.test.mjs",
+    "test:page-turn": "node scripts/test-page-turn-browser.mjs",
+    "test:deploy-environment": "sh scripts/test-deploy-environment.sh",
+    "test:production-preview": "sh scripts/test-production-preview.sh",
+    "test:service-worker": "node scripts/test-service-worker.mjs && node scripts/test-service-worker-rollout.mjs",
+    "test:ssr": "npm run build:client && npm run generate:site && node tests/run.js --require-ssr && node --test tests/frontend-build.test.mjs tests/homepage-optimization.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/seo-head.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -58,5 +54,10 @@
   "bugs": {
     "url": "https://github.com/mehmetb/galata-dergisi/issues"
   },
-  "homepage": "https://github.com/mehmetb/galata-dergisi#readme"
+  "homepage": "https://github.com/mehmetb/galata-dergisi#readme",
+  "packageManager": "npm@11.16.0",
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "fsevents@2.3.3": true
+  }
 }

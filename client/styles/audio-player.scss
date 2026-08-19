@@ -1,0 +1,427 @@
+/*
+  Copyright 2020 Mehmet Baker
+  Copyright 2026 Mehmet Baker
+
+  This file is part of galata-dergisi.
+
+  galata-dergisi is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  galata-dergisi is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with galata-dergisi. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+.player_container {
+  width: 435px;
+  height: 100px;
+  border-radius: 10px;
+  background-color: #404040;
+  font-weight: initial !important;
+  font-family: initial !important;
+  font-size: initial !important;
+  line-height: initial !important;
+  user-select: none;
+}
+
+.player_details {
+  /*Song Name, Song Artist, Next-Prev Buttons, <hr>*/
+  width: 413px;
+  height: 40px;
+  margin-left: 13px;
+  margin-top: 5px;
+  margin-bottom: 0;
+  background-color: #404040;
+  position: absolute;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  line-height: default;
+  color: #ffffff;
+}
+
+.song_name,
+#song_name {
+  box-sizing: border-box;
+  font-weight: bold;
+  overflow: hidden;
+  padding-right: 64px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song_artist,
+#song_artist {
+  box-sizing: border-box;
+  font-style: italic;
+  overflow: hidden;
+  padding-right: 64px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player_status_error {
+  color: #ffb3b3;
+  font-style: normal;
+  font-weight: bold;
+}
+
+.player_track_navigation {
+  top: calc(50% - 4px);
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  right: 4px;
+  transform: translateY(-50%);
+}
+
+.player_next,
+.player_previous {
+  align-items: center;
+  background-color: #404040;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.player_next:hover,
+.player_previous:hover,
+.player_next:focus-visible,
+.player_previous:focus-visible {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Player horizontal line */
+.horizontal_line {
+  height: 2px;
+  margin-top: 2px;
+  background: -webkit-linear-gradient(rightrgba(255, 255, 255, 0), rgba(255, 255, 255, 1)); /*Safari 5.1-6*/
+  background: -o-linear-gradient(left, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1)); /*Opera 11.1-12*/
+  background: -moz-linear-gradient(left, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1)); /*Fx 3.6-15*/
+  background: linear-gradient(to left, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1)); /*Standard*/
+}
+
+.player_play,
+.player_pause {
+  /*Play Button*/
+  align-items: center;
+  background-color: #404040;
+  border-radius: 5px;
+  color: #fff;
+  display: flex;
+  float: left;
+  height: 50px;
+  justify-content: center;
+  position: relative;
+  top: 50px;
+  width: 45px;
+  z-index: 0;
+}
+
+.player_play:hover,
+.player_pause:hover {
+  background-color: rgba(0, 173, 239, 0.9);
+  cursor: pointer;
+}
+
+.player_tracker_cont {
+  /*Tracker Container*/
+  position: relative;
+  display: table-cell;
+  vertical-align: middle;
+  min-height: 50px;
+  height: 50px;
+  width: 230px;
+  line-height: 50px;
+  margin-left: 50px;
+  float: left;
+  margin-left: 2px;
+  top: 50px;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.player_tracker {
+  /*Empty Tracker*/
+  position: absolute;
+  top: 20px;
+  left: 0;
+  height: 5px;
+  width: 230px;
+  border-width: 1px;
+  border-color: #808080;
+  border-style: solid;
+  border-radius: 5px;
+}
+
+.player_tracker_loaded {
+  /*Buffered Audio*/
+  position: absolute;
+  top: 20px;
+  left: 0;
+  height: 5px;
+  width: 0;
+  border-width: 1px;
+  border-color: #808080;
+  border-style: solid;
+  border-radius: 5px;
+  background-color: #808080;
+  z-index: 1;
+}
+
+.player_tracker_loaded:hover {
+  cursor: pointer;
+}
+
+.player_tracker_current {
+  /*Played Audio*/
+  position: absolute;
+  top: 20px;
+  left: 0;
+  height: 5px;
+  width: 0px;
+  border-width: 1px;
+  border-color: #808080;
+  border-style: solid;
+  border-radius: 5px;
+  background-color: #ffffff;
+  z-index: 2;
+}
+
+.player_tracker_current:hover {
+  cursor: pointer;
+}
+
+.player_navigator {
+  /*Tracker Navigator*/
+  position: absolute;
+  top: 17px;
+  left: 0px;
+  height: 10px;
+  width: 20px;
+  border-width: 1px;
+  border-color: #fff;
+  border-style: solid;
+  border-radius: 10px;
+  background-color: #fff;
+  z-index: 3;
+}
+
+.vertical-centering {
+  /*Centering for the Current Time MM:SS*/
+  height: 50px;
+  position: relative;
+  float: left;
+  top: 48px;
+  width: 20px;
+  display: table-cell;
+  vertical-align: middle;
+  min-height: 50px;
+  line-height: 50px;
+  left: 4px;
+}
+
+.player_time {
+  /*MM:SS*/
+  font-weight: bolder;
+  font-size: 13px;
+  cursor: default;
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.player_volume_button {
+  /*Volume Button*/
+  align-items: center;
+  color: #fff;
+  display: flex;
+  height: 50px;
+  justify-content: center;
+  width: 50px;
+  position: relative;
+  float: left;
+  top: 48px;
+  left: 10px;
+}
+
+.player_volume_button:hover {
+  cursor: pointer;
+}
+
+.volume_cont {
+  /*Volume Bar Container*/
+  position: relative;
+  float: left;
+  height: 50px;
+  width: 75px;
+  top: 50px;
+}
+
+.player_volume_bar {
+  /*Empty Volume Bar*/
+  position: absolute;
+  top: 20px;
+  height: 5px;
+  width: 75px;
+  border-width: 1px;
+  border-color: #808080;
+  border-style: solid;
+  border-radius: 5px;
+}
+
+.player_volume_bar:hover {
+  cursor: pointer;
+}
+
+.player_volume_current {
+  /*Volume Bar Showing the Volume*/
+  position: absolute;
+  top: 20px;
+  height: 5px;
+  width: 0px;
+  border-width: 1px;
+  border-color: #808080;
+  border-style: solid;
+  border-radius: 5px;
+  background-color: #ffffff;
+  z-index: 2;
+}
+
+.player_volume_current:hover {
+  cursor: pointer;
+}
+
+.right_bound {
+  /*Needed to Calculate offset.right*/
+  width: 1px;
+  height: 50px;
+  float: left;
+  left: 3px;
+  position: relative;
+  top: 50px;
+}
+
+.player_show_time {
+  /*Tracker-Hover Time (The Bubble)*/
+  position: relative;
+  width: 30px;
+  height: 12px;
+  text-align: center;
+  line-height: 10px;
+  background-color: #fff;
+  border: 1px solid #666;
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 9px;
+  border-radius: 3px;
+}
+
+.player_show_time:before {
+  content: " ";
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 12px;
+  top: 10px;
+  border: 4px solid;
+  border-color: #fff transparent transparent #fff;
+}
+
+.player_show_time:after {
+  content: " ";
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 12px;
+  top: 10px;
+  border: 2px solid;
+  border-color: #fff transparent transparent #fff;
+}
+
+.show_time,
+#show_time {
+  /*Outer Div for Fixing the Time Bubble*/
+  z-index: 1000;
+  position: fixed;
+}
+
+.show_time[hidden],
+#show_time[hidden] {
+  display: none;
+}
+
+/* The modern view keeps the legacy box model while using real controls. */
+.audio-player-mount {
+  display: contents;
+}
+
+.player_container button {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  font: inherit;
+}
+
+.player_container button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.audio-control-icon {
+  display: block;
+  fill: currentColor;
+  height: 24px;
+  pointer-events: none;
+  width: 24px;
+}
+
+.player_next .audio-control-icon,
+.player_previous .audio-control-icon {
+  height: 16px;
+  width: 16px;
+}
+
+.player_seek_input,
+.player_volume_input {
+  appearance: none;
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.player_seek_input {
+  width: 230px;
+  height: 50px;
+}
+
+.player_volume_input {
+  width: 75px;
+  height: 50px;
+}
+
+.player_tracker_cont:has(.player_seek_input:focus-visible),
+.volume_cont:has(.player_volume_input:focus-visible) {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}

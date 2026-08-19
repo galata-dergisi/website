@@ -18,40 +18,40 @@
   -->
 
 <script>
-  export let index;
-  export let publishDateText;
-  export let thumbnailURL;
-  export let visible = true;
-  export let carouselItem = false;
+  import {
+    CAROUSEL_PLACEHOLDER_URL,
+    getCarouselPlaceholderPosition,
+  } from './carousel-placeholder.mjs';
+  import { shouldHandleClientNavigation } from '../../../lib/link-navigation.mjs';
+  let {
+    index,
+    publishDateText,
+    thumbnailURL,
+    thumbnailSources = { avif: [] },
+    visible = true,
+    carouselItem = false,
+    motion = null,
+    onLoadMagazine = () => {},
+  } = $props();
 
-  // Just to suppress Svelte's warning
-  export let tableOfContents;
-  let silencer = tableOfContents;
+  let placeholderPosition = $derived(getCarouselPlaceholderPosition(index));
+  let thumbnailStyle = $derived([
+    ...(placeholderPosition ? [
+      `--placeholder-image: url(${CAROUSEL_PLACEHOLDER_URL})`,
+      `--placeholder-x: ${placeholderPosition.x}px`,
+      `--placeholder-y: ${placeholderPosition.y}px`,
+    ] : []),
+  ].join('; '));
+  let avifSrcset = $derived(
+    (thumbnailSources?.avif || [])
+      .map((source) => `${source.src} ${source.width}w`)
+      .join(', '),
+  );
 
-  import Utils from '../../../lib/Utils.js';
-  import { createEventDispatcher } from 'svelte';
-
-  let anchorElement;
-  const dispatch = createEventDispatcher();
-
-  async function handleClick() {
-    dispatch('loadmagazine', { index });
-  }
-
-  export function fadeIn() {
-    visible = true;
-    anchorElement.addEventListener('animationend', () => {
-      anchorElement.classList.remove('fade-in');
-    }, { once: true });
-    anchorElement.classList.add('fade-in');
-  }
-
-  export function fadeOut() {
-    anchorElement.addEventListener('animationend', () => {
-      visible = false;
-      anchorElement.classList.remove('fade-out');
-    }, { once: true });
-    anchorElement.classList.add('fade-out');
+  function handleClick(event) {
+    if (!shouldHandleClientNavigation(event, event.currentTarget)) return;
+    event.preventDefault();
+    onLoadMagazine({ index });
   }
 </script>
 
@@ -81,7 +81,12 @@
     width: 100px;
     height: 140px;
     margin: 0 auto;
-    outline: none !important;
+    outline: 3px solid transparent;
+    outline-offset: 4px;
+  }
+
+  a:focus-visible {
+    outline-color: #698145;
   }
 
   a.fade-in {
@@ -89,7 +94,7 @@
   }
 
   a.fade-out {
-    animation: fade-out .3s ease;
+    animation: fade-out .3s ease forwards;
   }
 
   a.carousel-item {
@@ -101,26 +106,61 @@
   }
 
   div.thumbnail-container {
-    background-size: 100%;
+    background-position: var(--placeholder-x) var(--placeholder-y);
+    background-repeat: no-repeat;
+    background-size: 1444.444444% 660%;
     width: 100px;
     height: 140px;
     box-shadow: 2px 2px 5px rgba(0,0,0,.6);
     transition: transform .1s;
   }
 
+  div.thumbnail-container.has-placeholder {
+    background-image: var(--placeholder-image);
+  }
+
+  picture,
+  img {
+    display: block;
+    height: 140px;
+    width: 100px;
+  }
+
   div.thumbnail-container:hover {
     transform: scale(1.8);
+  }
+
+  @media (forced-colors: active) {
+    a:focus-visible {
+      outline-color: Highlight;
+    }
   }
 </style>
 
 <a
-  href='/#'
-  bind:this={anchorElement}
-  class:fade-in={false}
-  class:fade-out={false}
+  href='/dergiler/sayi{index}'
+  class:fade-in={motion === 'in'}
+  class:fade-out={motion === 'out'}
   class:hidden={!visible}
   class:carousel-item={carouselItem}
   title="{publishDateText} - Sayı {index}"
-  on:click|preventDefault={handleClick}>
-  <div class="thumbnail-container" style="background-image: url({thumbnailURL})" />
+  onclick={handleClick}>
+  <div
+    class="thumbnail-container"
+    class:has-placeholder={placeholderPosition}
+    style={thumbnailStyle}>
+    <picture>
+      {#if avifSrcset}
+        <source srcset={avifSrcset} sizes="100px" type="image/avif" />
+      {/if}
+      <img
+        src={thumbnailURL}
+        alt="Sayı {index}, {publishDateText}"
+        width="100"
+        height="140"
+        decoding="async"
+        loading={carouselItem ? 'lazy' : 'eager'}
+        fetchpriority={carouselItem ? 'auto' : 'high'} />
+    </picture>
+  </div>
 </a>

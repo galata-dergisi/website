@@ -1,0 +1,110 @@
+name: Immutable site
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: galata-dergisi/static-assets
+          path: .static-assets
+          token: ${{ secrets.STATIC_ASSETS_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Verify canonical public database
+        run: npm run content:verify
+
+      - name: Verify Go-only runtime boundary
+        run: npm run verify:runtime-boundary
+
+      - name: Lint build-time JavaScript
+        run: npm run lint
+
+      - name: Build browser, SSR, and generated site
+        run: npm run build
+        env:
+          GALATA_STATIC_ASSETS_ROOT: .static-assets/server-assets/public/images
+
+      - name: Verify native page-turn bundle size
+        run: npm run verify:page-turn-size
+
+      - name: Verify all generated routes and encodings
+        run: npm run verify:site
+
+      - name: Verify deterministic generation
+        run: |
+          npm run hash:site > /tmp/galata-site-first.sha256
+          npm run build
+          npm run hash:site > /tmp/galata-site-second.sha256
+          diff -u /tmp/galata-site-first.sha256 /tmp/galata-site-second.sha256
+        env:
+          GALATA_STATIC_ASSETS_ROOT: .static-assets/server-assets/public/images
+
+      - name: Run build-time SSR and SEO tests
+        run: npm run test:ssr
+        env:
+          GALATA_STATIC_ASSETS_ROOT: .static-assets/server-assets/public/images
+
+      - name: Run service-worker lifecycle tests
+        run: npm run test:service-worker
+
+      - name: Run native page-turn browser parity tests
+        run: npm run test:page-turn
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Run Go race tests
+        run: go test -race ./...
+
+      - name: Run Go vet
+        run: go vet ./...
+
+      - name: Test deployment helper in the server environment
+        run: npm run test:deploy-environment
+
+      - name: Build Linux releases
+        run: sh scripts/build-release.sh
+        env:
+          GALATA_MEDIA_ROOT: .static-assets/server-assets/public
+
+      - name: Verify release checksums
+        working-directory: release
+        run: sha256sum -c SHA256SUMS
+
+      - name: Scan releases for private database values
+        run: node scripts/scan-release.js release/galata-server-linux-amd64 release/galata-server-linux-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: galata-server-linux
+          path: |
+            release/galata-server-linux-*
+            release/RELEASE-MANIFEST
+            release/MEDIA-SHA256SUMS
+            release/SHA256SUMS
+          if-no-files-found: error

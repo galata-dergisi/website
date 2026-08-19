@@ -1,0 +1,42 @@
+[Unit]
+Description=Galata Dergisi dev server
+After=network-online.target
+Wants=network-online.target
+ConditionFileIsExecutable=/opt/galata/current-dev/galata-server
+ConditionPathExists=/etc/galata/dev.env
+
+[Service]
+Type=simple
+User=galata-dev
+Group=galata-dev
+EnvironmentFile=/etc/galata/dev.env
+ExecStart=/usr/bin/env /opt/galata/current-dev/galata-server
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=25s
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/galata-dev-contributions
+
+[Install]
+WantedBy=multi-user.target

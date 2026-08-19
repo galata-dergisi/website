@@ -29,8 +29,9 @@ bower_components
 # node-waf configuration
 .lock-wscript
 
-# Compiled binary addons (https://nodejs.org/api/addons.html)
-build/Release
+# Generated browser SSR bundle
+/build/
+/.static-assets/
 
 # Dependency directories
 node_modules/
@@ -54,21 +55,39 @@ typings/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
-.env
+# Local environment files
+.env*
+!.env.example
+
+# Operational secrets and generated deployment credentials
+/ops/**/*.env
+/ops/**/*.key
+/ops/**/*.pem
+/ops/**/*known_hosts*
+/ops/**/*deploy-key*
 
 # next.js build output
 .next
 public/
 config.js
+/server/
 .vscode/
 /client/audio
+/client/images/carousel-thumbnail-placeholders.webp
 utility-scripts/
 *.sql
 sql-backups/
+database-exports/
 uploads/
+internal/site/dist/*
+!internal/site/dist/placeholder.txt
+release/
+zap-reports/
 credentials.json
 token.json
+
+__pycache__/
+*.py[cod]
 
 *.mp3
 *.ogg

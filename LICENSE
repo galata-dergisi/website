@@ -18,7 +18,17 @@
   along with galata-dergisi. If not, see <https://www.gnu.org/licenses/>.
 """
 
-- turn.js, located at client/src/vendor/turnjs, is licensed as follows:
+- The GNU General Public License grant above applies to the software source
+  code and project-authored technical documentation and configuration in this
+  repository. Editorial content and media published in magazine issues,
+  including articles, poems, illustrations, photographs, audio, and video,
+  are not licensed under the GNU General Public License. Unless separately
+  stated, copyright in that material remains with its respective authors and
+  other rightsholders, and no additional license is granted by this file.
+
+- The native page-turn engine at client/lib/page-turn.mjs and its geometry
+  helpers at client/lib/page-turn-math.mjs are derived from turn.js 3rd
+  release and are licensed as follows:
 """
   turn.js 3rd release
   www.turnjs.com
@@ -49,20 +59,84 @@
   SUCH DAMAGE.
 """
 
-- jQuery, located at
-  https://cdnjs.cloudflare.com/ajax/libs/jquery/1.7.1/jquery.min.js, is
-  licensed as follows:
+- The GitHub mark in client/pages/homepage/components/GithubIcon.svelte is
+  derived from Primer Octicons 9.6.0 and is licensed as follows:
 """
-  Copyright 2011, John Resig
-  Dual licensed under the MIT or GPL Version 2 licenses.
-  http://jquery.org/license
+  MIT License
 
-  Includes Sizzle.js
-  http://sizzlejs.com/
-  Copyright 2011, The Dojo Foundation
-  Released under the MIT, BSD, and GPL Licenses.
+  Copyright (c) 2020 GitHub Inc.
 
-  Date: Mon Nov 21 21:11:03 2011 -0500
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+"""
+
+  GitHub and the Invertocat mark are trademarks of GitHub, Inc. The mark is
+  used only to identify a link to this project's GitHub repository.
+
+- Compiled frontend bundles include runtime code from Svelte 5.56.8, licensed
+  as follows:
+"""
+  Copyright (c) 2016-2025 Svelte Contributors
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+"""
+
+- The akaDora Font at client/fonts/akaDora.woff2 is a lossless format
+  conversion of the original TrueType font. Its embedded authorship, font
+  name, trademark, and license records are preserved. It is licensed as
+  follows:
+"""
+  Copyright (c) James D. Milligan and akaType, 2005. All rights reserved.
+  akaDora is a trademark of James D. Milligan and akaType.
+  Designed by James Milligan. Adapted to Turkish by Ugur KIR.
+
+  All akaType™ fonts currently released are free for use in your projects
+  whether personal or commercial in nature. You may use images created using
+  the fonts in any way you wish. You may give copies of the font files to
+  anyone you wish so long as the restrictions listed below are adhered to.
+  The only real restrictions I have on their use and/or redistribution is
+  that:
+
+  1. You may not sell the actual font files, singly; nor include the font
+     files in a collection of fonts which will be sold.
+  2. You may not bundle the font files with software which is to be sold, nor
+     require anyone to buy something in order to receive the font files.
+  3. I require that my trademarks be respected (i.e. authorship and font
+     names may not be stripped from the font files themselves).
+
+  James D. Milligan--akaType™
+  Poteau, OK
 """
 
 - Playfair Display Font, located at
@@ -75,7 +149,104 @@
   This Font Software is licensed under the SIL Open Font License, Version 1.1.
   This license is copied below, and is also available with a FAQ at:
   http://scripts.sil.org/OFL
+
+  -----------------------------------------------------------
+  SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+  -----------------------------------------------------------
+
+  PREAMBLE
+  The goals of the Open Font License (OFL) are to stimulate worldwide
+  development of collaborative font projects, to support the font creation
+  efforts of academic and linguistic communities, and to provide a free and
+  open framework in which fonts may be shared and improved in partnership
+  with others.
+
+  The OFL allows the licensed fonts to be used, studied, modified and
+  redistributed freely as long as they are not sold by themselves. The
+  fonts, including any derivative works, can be bundled, embedded,
+  redistributed and/or sold with any software provided that any reserved
+  names are not used by derivative works. The fonts and derivatives,
+  however, cannot be released under any other type of license. The
+  requirement for fonts to remain under this license does not apply
+  to any document created using the fonts or their derivatives.
+
+  DEFINITIONS
+  "Font Software" refers to the set of files released by the Copyright
+  Holder(s) under this license and clearly marked as such. This may
+  include source files, build scripts and documentation.
+
+  "Reserved Font Name" refers to any names specified as such after the
+  copyright statement(s).
+
+  "Original Version" refers to the collection of Font Software components as
+  distributed by the Copyright Holder(s).
+
+  "Modified Version" refers to any derivative made by adding to, deleting,
+  or substituting -- in part or in whole -- any of the components of the
+  Original Version, by changing formats or by porting the Font Software to a
+  new environment.
+
+  "Author" refers to any designer, engineer, programmer, technical
+  writer or other person who contributed to the Font Software.
+
+  PERMISSION & CONDITIONS
+  Permission is hereby granted, free of charge, to any person obtaining
+  a copy of the Font Software, to use, study, copy, merge, embed, modify,
+  redistribute, and sell modified and unmodified copies of the Font
+  Software, subject to the following conditions:
+
+  1) Neither the Font Software nor any of its individual components,
+  in Original or Modified Versions, may be sold by itself.
+
+  2) Original or Modified Versions of the Font Software may be bundled,
+  redistributed and/or sold with any software, provided that each copy
+  contains the above copyright notice and this license. These can be
+  included either as stand-alone text files, human-readable headers or
+  in the appropriate machine-readable metadata fields within text or
+  binary files as long as those fields can be easily viewed by the user.
+
+  3) No Modified Version of the Font Software may use the Reserved Font
+  Name(s) unless explicit written permission is granted by the corresponding
+  Copyright Holder. This restriction only applies to the primary font name as
+  presented to the users.
+
+  4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+  Software shall not be used to promote, endorse or advertise any
+  Modified Version, except to acknowledge the contribution(s) of the
+  Copyright Holder(s) and the Author(s) or with their explicit written
+  permission.
+
+  5) The Font Software, modified or unmodified, in part or in whole,
+  must be distributed entirely under this license, and must not be
+  distributed under any other license. The requirement for fonts to
+  remain under this license does not apply to any document created
+  using the Font Software.
+
+  TERMINATION
+  This license becomes null and void if any of the above conditions are
+  not met.
+
+  DISCLAIMER
+  THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+  OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+  COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+  INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+  DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+  OTHER DEALINGS IN THE FONT SOFTWARE.
 """
 
-- Material Icons, located at https://fonts.googleapis.com/icon?family=Material+Icons,
-  is licensed under the Apache License, Version 2.0
+- SVG icon data derived from Font Awesome Free 5.15.4, located at
+  https://github.com/FortAwesome/Font-Awesome/tree/5.15.4, is licensed as follows:
+"""
+  Font Awesome Free 5.15.4 by Fonticons, Inc. (https://fontawesome.com)
+
+  The SVG icons are licensed under the Creative Commons Attribution 4.0
+  International license: https://creativecommons.org/licenses/by/4.0/
+
+  The icon geometry is unmodified and has been repackaged into an inline SVG
+  sprite for this project. Brand icons are trademarks of their respective
+  owners and are used only to represent the corresponding services.
+"""

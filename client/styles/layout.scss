@@ -18,20 +18,8 @@
 */
 
 @font-face {
-  font-family: "Sanskrit";
-  src: url("../fonts/sanskrit.ttf");
-}
-
-@font-face {
   font-family: "akaDora";
-  src: url("../fonts/akaDora.ttf");
-}
-
-@font-face {
-  font-family: "Stempel-Garamond-W01-Roman";
-  font-style: normal;
-  font-weight: normal;
-  src: url("../fonts/Stempel-Garamond-W01-Roman.woff") format("woff");
+  src: url("/fonts/akaDora.woff2") format("woff2");
 }
 
 .magazine {
@@ -127,6 +115,24 @@ h3 {
   font-size: 13px;
 }
 
+a.contributor-link {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    text-decoration: underline;
+  }
+}
+
+.recitation-anchor {
+  display: block;
+  position: relative;
+  top: -10px;
+  visibility: hidden;
+}
+
 pre,
 p {
   font-family: "Lucida Console", monospace;
@@ -190,14 +196,20 @@ div {
 .mKunyeTable {
   padding-left: 123px;
 
-  i.fab,
-  i.fas {
+  .legacy-icon {
     width: 32px;
     height: 32px;
-    line-height: 32px;
     color: #444;
-    font-size: 32px;
   }
+}
+
+.legacy-icon {
+  display: inline-block;
+  fill: currentColor;
+  height: 1em;
+  overflow: visible;
+  vertical-align: -0.125em;
+  width: 1em;
 }
 
 .mKunyeTitle {
@@ -256,6 +268,32 @@ div {
   font-family: "Lucida Console", monospace;
   font-size: 12px;
   float: right;
+}
+
+.mContents td {
+  position: relative;
+}
+
+.mContents .toc-contributor-links {
+  position: absolute;
+  z-index: 1;
+  top: 1px;
+  right: 4px;
+  float: none;
+  line-height: 22px;
+
+  a.contributor-link {
+    position: static;
+    display: inline;
+    float: none;
+    width: auto;
+    clear: none;
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+    background: transparent;
+    border-radius: 0;
+  }
 }
 
 .mIcResim {

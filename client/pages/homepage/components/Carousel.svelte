@@ -18,113 +18,218 @@
   -->
 
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import MagazineThumbnail from './MagazineThumbnail.svelte';
   import Arrow from './Arrow.svelte';
-  /**
-   * Holds Svelte instances of MagazineThumbnail components
-   * @type {object}
-   */
-  const magazineThumbnailInstances = {};
+  import {
+    ITEM_STEP,
+    TRANSITION_TIMEOUT,
+    beginCarouselMove,
+    clampFirstItemPosition,
+    createCarouselState,
+    finishCarouselMove,
+    getCarouselWindow,
+    rebaseCarouselMove,
+    reconcileCarouselState,
+  } from './carousel-state.mjs';
+  let { items = [], onLoadMagazine = () => {} } = $props();
 
-  /**
-   * @typedef CarouselMagazine
-   * @type {object}
-   * @property {number} index Publish index.
-   * @property {string} publishDateText Date text (e.g. Mart 2018)
-   * @property {string} thumbnailURL Thumbnail URL
-   * @property {boolean} visible Visibility flag.
-   */
-
-  /**
-   * @type {CarouselMagazine[]}
-   */
-  let carouselMagazines = [];
-
-  //Holds the array index of the left-most visible magazine.
-  let firstItemIndex = 0;
-
-  //A boolean flag. Arrow click handlers will stop working when set to true.
-  let blockEvents = false;
-
-  //items div will be bound to this variable.
-  let itemsElement;
-  $: leftArrowDisabled = firstItemIndex === 0;
-  $: rightArrowDisabled = firstItemIndex + 3 >= carouselMagazines.length;
-
-  function handleTransitionEnd() {
-    //We are unblocking the arrow click handlers when slide transition is over.
-    blockEvents = false;
+  function getInitialCarouselState() {
+    return createCarouselState(items);
   }
 
-  function handleLeftArrowClick() {
-    if (blockEvents) return;
+  const initialCarouselState = getInitialCarouselState();
+  let carouselState = $state.raw(initialCarouselState);
+  let displayedPosition = $state(initialCarouselState.targetFirstItemIndex);
+  let buffered = $state(false);
+  let previousItems = $state.raw();
+  let completionTimer = null;
+  let removeLoadListener = null;
+  let trackElement = $state();
+  let transitionEnabled = $state(true);
+  let restartPending = $state(false);
+  let transitionRevision = $state(0);
+  let destroyed = false;
+  let initializedItems = $state(false);
 
-    blockEvents = true;
 
-    //Fade out the right-most visible magazine thumbnail.
-    magazineThumbnailInstances[firstItemIndex + 2].fadeOut();
 
-    //If there is an invisible mag on the left of left-most visible magazine, fade it in
-    if (firstItemIndex - 1 >= 0) {
-      magazineThumbnailInstances[firstItemIndex - 1].fadeIn();
-    }
-
-    //Svelte will update the translateX style and CSS transition will occur.
-    --firstItemIndex;
+  function clearCompletionTimer() {
+    if (completionTimer === null) return;
+    clearTimeout(completionTimer);
+    completionTimer = null;
   }
 
-  function handleRightArrowClick() {
-    if (blockEvents) return;
-
-    blockEvents = true;
-    //Fade out the left-most visible magazine thumbnail.
-    magazineThumbnailInstances[firstItemIndex].fadeOut();
-
-    //If there is an invisible mag on the right of right-most visible mag, fade it in
-    if (firstItemIndex + 3 < carouselMagazines.length) {
-      magazineThumbnailInstances[firstItemIndex + 3].fadeIn();
-    }
-
-    //Svelte will update the translateX style and CSS transition will occur.
-    ++firstItemIndex;
+  function finishMovement(revision = transitionRevision) {
+    if (revision !== transitionRevision) return;
+    clearCompletionTimer();
+    if (!carouselState.animating) return;
+    restartPending = false;
+    transitionEnabled = true;
+    carouselState = finishCarouselMove(carouselState, items);
+    displayedPosition = carouselState.targetFirstItemIndex;
   }
 
-  export function setCarouselItems(items) {
-    for (let i = 0; i < items.length; ++i) {
-      //Only the first 3 items should be visible
-      items[i].visible = i >= firstItemIndex && i <= firstItemIndex + 2;
+  function scheduleCompletionTimer(revision) {
+    clearCompletionTimer();
+    completionTimer = setTimeout(
+      () => finishMovement(revision),
+      TRANSITION_TIMEOUT,
+    );
+  }
+
+  function readTrackPosition() {
+    const fallbackPosition = clampFirstItemPosition(displayedPosition, items);
+    if (!trackElement) return fallbackPosition;
+
+    const transform = getComputedStyle(trackElement).transform;
+    if (!transform || transform === 'none') return fallbackPosition;
+
+    try {
+      const matrix = new DOMMatrixReadOnly(transform);
+      return clampFirstItemPosition(-matrix.m41 / ITEM_STEP, items);
+    } catch {
+      return fallbackPosition;
+    }
+  }
+
+  async function restoreTransitionAfterSnap(revision) {
+    await tick();
+    if (destroyed || revision !== transitionRevision) return;
+    if (trackElement) trackElement.getBoundingClientRect();
+    transitionEnabled = true;
+  }
+
+  async function restartMovement(nextState, sourcePosition) {
+    const revision = transitionRevision + 1;
+    transitionRevision = revision;
+    clearCompletionTimer();
+
+    if (!nextState.animating) {
+      restartPending = false;
+      transitionEnabled = true;
+      carouselState = finishCarouselMove(nextState, items);
+      displayedPosition = carouselState.targetFirstItemIndex;
+      return;
     }
 
-    carouselMagazines = items;
-    leftArrowDisabled = true;
-    rightArrowDisabled = false;
+    restartPending = true;
+    transitionEnabled = false;
+    carouselState = nextState;
+    displayedPosition = sourcePosition;
+
+    await tick();
+    if (destroyed || revision !== transitionRevision || !trackElement) return;
+
+    trackElement.getBoundingClientRect();
+    transitionEnabled = true;
+    displayedPosition = nextState.targetFirstItemIndex;
+
+    await tick();
+    if (destroyed || revision !== transitionRevision) return;
+
+    restartPending = false;
+    scheduleCompletionTimer(revision);
+  }
+
+  function handleTrackTransitionEnd(event) {
+    if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
+    finishMovement();
+  }
+
+  function handleTrackTransitionCancel(event) {
+    if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
+    if (restartPending || !carouselState.animating) return;
+
+    const sourcePosition = readTrackPosition();
+    const nextState = rebaseCarouselMove(
+      carouselState,
+      sourcePosition,
+      items,
+    );
+    restartMovement(nextState, sourcePosition);
+  }
+
+  function move(direction) {
+    const sourcePosition = readTrackPosition();
+    const nextState = beginCarouselMove(
+      carouselState,
+      direction,
+      sourcePosition,
+      items,
+    );
+    if (nextState === carouselState) return;
+
+    restartMovement(nextState, sourcePosition);
+  }
+
+  function enableBuffer() {
+    buffered = true;
+    removeLoadListener = null;
   }
 
   onMount(() => {
-    itemsElement.addEventListener('transitionend', handleTransitionEnd);
-  });
+    if (document.readyState === 'complete') {
+      enableBuffer();
+    } else {
+      window.addEventListener('load', enableBuffer, { once: true });
+      removeLoadListener = () => window.removeEventListener('load', enableBuffer);
+    }
 
-  onDestroy(() => {
-    itemsElement.removeEventListener('transitionend', handleTransitionEnd);
+    return () => {
+      destroyed = true;
+      transitionRevision += 1;
+      if (removeLoadListener) removeLoadListener();
+      clearCompletionTimer();
+    };
   });
+  $effect(() => {
+    if (items !== previousItems) {
+      const shouldSnap = initializedItems;
+      initializedItems = true;
+      previousItems = items;
+      transitionRevision += 1;
+      clearCompletionTimer();
+      carouselState = reconcileCarouselState(carouselState, items);
+      displayedPosition = carouselState.targetFirstItemIndex;
+      transitionEnabled = !shouldSnap;
+      restartPending = false;
+      if (shouldSnap) restoreTransitionAfterSnap(transitionRevision);
+    }
+  });
+  let targetFirstItemIndex = $derived(carouselState.targetFirstItemIndex);
+  let renderedWindow = $derived(getCarouselWindow(items, carouselState, buffered));
+  let leftArrowDisabled = $derived(targetFirstItemIndex === 0);
+  let rightArrowDisabled = $derived(targetFirstItemIndex + 3 >= items.length);
 </script>
-
 
 <div class="carousel">
   <div class="left-arrow">
     <Arrow
       disabled={leftArrowDisabled}
-      on:click={handleLeftArrowClick}
+      onClick={() => move(-1)}
+      onNavigate={({ direction }) => move(direction)}
      />
    </div>
 
-  <div class="items" style="transform: translateX(-{firstItemIndex * 150}px" bind:this={itemsElement}>
-    {#each carouselMagazines as magazine, i}
-      <MagazineThumbnail {...magazine}
+  <div
+    class="items"
+    class:transition-disabled={!transitionEnabled}
+    style="transform: translateX({-displayedPosition * ITEM_STEP}px)"
+    bind:this={trackElement}
+    ontransitionend={handleTrackTransitionEnd}
+    ontransitioncancel={handleTrackTransitionCancel}>
+    {#if renderedWindow.startIndex > 0}
+      <div
+        class="leading-space"
+        style="width: {renderedWindow.startIndex * ITEM_STEP}px"></div>
+    {/if}
+    {#each renderedWindow.entries as entry (entry.item.index)}
+      <MagazineThumbnail {...entry.item}
+        visible={entry.visible}
+        motion={entry.motion}
         carouselItem={true}
-        on:loadmagazine
-        bind:this={magazineThumbnailInstances[i]} />
+        {onLoadMagazine} />
     {/each}
   </div>
 
@@ -132,7 +237,8 @@
     <Arrow
       direction="right"
       disabled={rightArrowDisabled}
-      on:click={handleRightArrowClick} />
+      onClick={() => move(1)}
+      onNavigate={({ direction }) => move(direction)} />
   </div>
 </div>
 
@@ -146,6 +252,15 @@
     display: flex;
     transition: transform .3s ease;
     padding-left: 12px;
+  }
+
+  .items.transition-disabled {
+    transition: none;
+  }
+
+  .leading-space {
+    flex: 0 0 auto;
+    height: 140px;
   }
 
   .left-arrow, .right-arrow {
