@@ -40,12 +40,12 @@
     "lint": "eslint \"client/**/*.{js,mjs,svelte}\" \"scripts/**/*.{js,mjs}\" \"tests/**/*.{js,mjs}\" \"*.config.mjs\"",
     "security:zap": "sh scripts/zap-scan.sh",
     "security:zap:active": "sh scripts/zap-scan.sh active",
-    "test": "npm run generate:carousel-sheet && node tests/run.js && node --test tests/deploy-server.test.mjs tests/dev-orchestrator.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/scan-release.test.mjs tests/seo-head.test.mjs tests/server-setup.test.mjs",
+    "test": "npm run generate:carousel-sheet && node tests/run.js && node --test tests/carousel-sheet.test.mjs tests/deploy-server.test.mjs tests/dev-orchestrator.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/scan-release.test.mjs tests/seo-head.test.mjs tests/server-setup.test.mjs",
     "test:page-turn": "node scripts/test-page-turn-browser.mjs",
     "test:deploy-environment": "sh scripts/test-deploy-environment.sh",
     "test:production-preview": "sh scripts/test-production-preview.sh",
     "test:service-worker": "node scripts/test-service-worker.mjs && node scripts/test-service-worker-rollout.mjs",
-    "test:ssr": "npm run build:client && npm run generate:site && node tests/run.js --require-ssr && node --test tests/frontend-build.test.mjs tests/homepage-optimization.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/seo-head.test.mjs"
+    "test:ssr": "npm run build:client && npm run generate:site && node tests/run.js --require-ssr && node --test tests/carousel-sheet.test.mjs tests/frontend-build.test.mjs tests/homepage-optimization.test.mjs tests/link-navigation.test.mjs tests/page-media-state.test.mjs tests/page-turn.test.mjs tests/reader-history.test.mjs tests/reader-load.test.mjs tests/reader-transition.test.mjs tests/seo-head.test.mjs"
   },
   "repository": {
     "type": "git",

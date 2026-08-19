@@ -11,7 +11,7 @@ import {
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDirectory, '..');
 const imagesDirectory = path.join(projectRoot, 'client', 'images');
-const outputPath = path.join(
+const defaultOutputPath = path.join(
   imagesDirectory,
   'carousel-thumbnail-placeholders.webp',
 );
@@ -25,8 +25,29 @@ const {
   placeholderWidth,
 } = CAROUSEL_PLACEHOLDER_GEOMETRY;
 
-function getThumbnailPath(issueIndex) {
-  return path.join(imagesDirectory, `sayi${issueIndex}`, 'thumbnail.jpg');
+function resolveThumbnailDirectory(environment) {
+  const candidates = [
+    environment.GALATA_STATIC_ASSETS_ROOT
+      ? path.resolve(projectRoot, environment.GALATA_STATIC_ASSETS_ROOT)
+      : null,
+    path.resolve(
+      projectRoot,
+      '..',
+      'galata-dergisi-static-assets',
+      'server-assets',
+      'public',
+      'images',
+    ),
+    imagesDirectory,
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => (
+    fs.existsSync(path.join(candidate, 'sayi1', 'thumbnail.jpg'))
+  ));
+}
+
+function getThumbnailPath(thumbnailDirectory, issueIndex) {
+  return path.join(thumbnailDirectory, `sayi${issueIndex}`, 'thumbnail.jpg');
 }
 
 async function createPlaceholder(thumbnailPath) {
@@ -46,14 +67,24 @@ async function writeIfChanged(filePath, content) {
   return true;
 }
 
-export async function generateCarouselSheet() {
+export async function generateCarouselSheet({
+  environment = process.env,
+  outputPath = defaultOutputPath,
+} = {}) {
+  const thumbnailDirectory = resolveThumbnailDirectory(environment);
+  if (!thumbnailDirectory) {
+    throw new Error(
+      'Canonical carousel thumbnails are missing. '
+      + 'Set GALATA_STATIC_ASSETS_ROOT to the external images directory.',
+    );
+  }
   const rowCount = Math.ceil(CAROUSEL_PLACEHOLDER_ISSUE_COUNT / columnCount);
   const composites = await Promise.all(
     Array.from(
       { length: CAROUSEL_PLACEHOLDER_ISSUE_COUNT },
       async (_, spriteIndex) => {
         const issueIndex = spriteIndex + 1;
-        const thumbnailPath = getThumbnailPath(issueIndex);
+        const thumbnailPath = getThumbnailPath(thumbnailDirectory, issueIndex);
         if (!fs.existsSync(thumbnailPath)) {
           throw new Error(`Missing carousel thumbnail: ${thumbnailPath}`);
         }
