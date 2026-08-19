@@ -346,24 +346,33 @@ test('tracked helper encodes slot isolation, candidate checks, rollback, and sud
   assert.equal(fs.existsSync(path.join(repositoryRoot, 'ops/certbot-remote.sh')), false);
 });
 
-test('workflow pins CI and media provenance and exposes no setup secrets', () => {
+test('deployment builds and tests its own artifact while preserving provenance', () => {
   const workflow = fs.readFileSync(
     path.join(repositoryRoot, '.github/workflows/deploy.yml'), 'utf8',
   );
-  const immutable = fs.readFileSync(
-    path.join(repositoryRoot, '.github/workflows/immutable-site.yml'), 'utf8',
+  const verificationWorkflow = fs.readFileSync(
+    path.join(repositoryRoot, '.github/workflows/verify.yml'), 'utf8',
   );
   assert.match(workflow, /test "\$GITHUB_REF" = refs\/heads\/main/);
   assert.match(workflow, /select\(\.head_sha ==/);
-  assert.match(workflow, /run-id: \$\{\{ steps\.immutable\.outputs\.run_id \}\}/);
+  assert.match(workflow, /Build Linux releases/);
+  assert.match(workflow, /Smoke-test deployable Linux release/);
+  assert.match(workflow, /Upload tested deployment artifact/);
+  assert.match(workflow, /Download tested deployment artifact/);
+  assert.match(workflow, /needs: build/);
   assert.match(workflow, /ref: \$\{\{ steps\.provenance\.outputs\.static_commit \}\}/);
   assert.match(workflow, /environment: \$\{\{ inputs\.target \}\}/);
   assert.match(workflow, /group: galata-vps-deployment/);
-  assert.doesNotMatch(workflow, /TURNSTILE|CLOUDFLARE|BASIC_AUTH/);
-  assert.match(immutable, /token: \$\{\{ secrets\.STATIC_ASSETS_TOKEN \}\}/);
-  assert.match(immutable, /persist-credentials: false/);
-  assert.match(immutable, /release\/RELEASE-MANIFEST/);
-  assert.match(immutable, /release\/MEDIA-SHA256SUMS/);
+  assert.doesNotMatch(
+    workflow,
+    /secrets\.(?:TURNSTILE|CLOUDFLARE|BASIC_AUTH)/,
+  );
+  assert.match(verificationWorkflow, /name: Verify site and server/);
+  assert.match(verificationWorkflow, /token: \$\{\{ secrets\.STATIC_ASSETS_TOKEN \}\}/);
+  assert.match(verificationWorkflow, /persist-credentials: false/);
+  assert.doesNotMatch(verificationWorkflow, /build-release\.sh/);
+  assert.doesNotMatch(verificationWorkflow, /actions\/upload-artifact/);
+  assert.doesNotMatch(verificationWorkflow, /release\/RELEASE-MANIFEST/);
 });
 
 test('nginx keeps tunnel-only slots, Access boundary, limits, and media roots independent', () => {

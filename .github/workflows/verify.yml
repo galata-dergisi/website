@@ -1,4 +1,4 @@
-name: Immutable site
+name: Verify site and server
 
 on:
   pull_request:
@@ -86,25 +86,3 @@ jobs:
 
       - name: Test deployment helper in the server environment
         run: npm run test:deploy-environment
-
-      - name: Build Linux releases
-        run: sh scripts/build-release.sh
-        env:
-          GALATA_MEDIA_ROOT: .static-assets/server-assets/public
-
-      - name: Verify release checksums
-        working-directory: release
-        run: sha256sum -c SHA256SUMS
-
-      - name: Scan releases for private database values
-        run: node scripts/scan-release.js release/galata-server-linux-amd64 release/galata-server-linux-arm64
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: galata-server-linux
-          path: |
-            release/galata-server-linux-*
-            release/RELEASE-MANIFEST
-            release/MEDIA-SHA256SUMS
-            release/SHA256SUMS
-          if-no-files-found: error

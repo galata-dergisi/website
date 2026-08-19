@@ -20,17 +20,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
     steps:
       - name: Checkout selected main commit
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Require successful exact-SHA Immutable site run
-        id: immutable
+      - name: Require successful exact-SHA verification run
         env:
           GH_TOKEN: ${{ github.token }}
           SELECTED_SHA: ${{ github.sha }}
@@ -39,24 +37,103 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           run_id=$(
             gh api --method GET \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/immutable-site.yml/runs" \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/verify.yml/runs" \
               -f branch=main -f status=success -f per_page=100 \
               --jq ".workflow_runs[] | select(.head_sha == \"$SELECTED_SHA\" and .conclusion == \"success\") | .id" \
               | head -1
           )
           test -n "$run_id" || {
-            echo "No successful Immutable site run exactly matches $SELECTED_SHA" >&2
+            echo "No successful Verify site and server run exactly matches $SELECTED_SHA" >&2
             exit 1
           }
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
-      - name: Download exact CI artifact
+      - name: Checkout current immutable media
+        uses: actions/checkout@v7
+        with:
+          repository: galata-dergisi/static-assets
+          path: .static-assets
+          token: ${{ secrets.STATIC_ASSETS_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build browser, SSR, and generated site
+        run: npm run build
+        env:
+          GALATA_STATIC_ASSETS_ROOT: .static-assets/server-assets/public/images
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Build Linux releases
+        run: sh scripts/build-release.sh
+        env:
+          GALATA_MEDIA_ROOT: .static-assets/server-assets/public
+
+      - name: Verify release checksums
+        working-directory: release
+        run: sha256sum -c SHA256SUMS
+
+      - name: Scan releases for private database values
+        run: node scripts/scan-release.js release/galata-server-linux-amd64 release/galata-server-linux-arm64
+
+      - name: Smoke-test deployable Linux release
+        env:
+          CONTRIBUTIONS_DIR: ${{ runner.temp }}/galata-contributions
+          LISTEN_ADDR: 127.0.0.1:3000
+          TURNSTILE_ALLOWED_HOSTNAMES: example.invalid
+          TURNSTILE_SECRET_KEY: deployment-artifact-smoke-test
+        run: |
+          set -euo pipefail
+          release/galata-server-linux-amd64 > "$RUNNER_TEMP/galata-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          expected_release=$(sed -n 's/^embedded_site_release=//p' release/RELEASE-MANIFEST)
+          for attempt in {1..30}; do
+            if health=$(curl --fail --silent --show-error --max-time 2 http://127.0.0.1:3000/healthz); then
+              printf '%s' "$health" | grep -Fq '"ok":true'
+              printf '%s' "$health" | grep -Fq "\"release\":\"$expected_release\""
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/galata-server.log" >&2
+          exit 1
+
+      - name: Upload tested deployment artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: galata-server-linux
+          path: |
+            release/galata-server-linux-*
+            release/RELEASE-MANIFEST
+            release/MEDIA-SHA256SUMS
+            release/SHA256SUMS
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Checkout selected main commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download tested deployment artifact
         uses: actions/download-artifact@v8
         with:
           name: galata-server-linux
           path: release
-          run-id: ${{ steps.immutable.outputs.run_id }}
-          github-token: ${{ github.token }}
 
       - name: Validate artifact provenance
         id: provenance

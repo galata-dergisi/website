@@ -99,7 +99,7 @@ git diff --check origin/main...dev
 ## 3. Push `dev` and open a draft pull request
 
 Publish the exact candidate commit and open a draft pull request so the
-`Immutable site` workflow runs before deployment:
+`Verify site and server` workflow runs before deployment:
 
 ```sh
 git push -u origin dev
@@ -173,7 +173,7 @@ Review every report under `zap-reports/`, including warnings that do not fail
 the baseline command. Do not suppress a finding merely to make the command
 green.
 
-Finally, wait for the draft pull request's exact-SHA `Immutable site` workflow
+Finally, wait for the draft pull request's exact-SHA `Verify site and server` workflow
 to succeed. Investigate any difference between CI and the local results.
 
 ## 5. Build and bind the immutable release
@@ -361,6 +361,6 @@ commit. If branch protection requires GitHub to create a merge or squash
 commit, that new `main` SHA is a new release candidate: wait for its CI, deploy
 that SHA to dev, and repeat verification before any production deployment.
 
-After merge, wait for the `Immutable site` workflow on the resulting `main` SHA
+After merge, wait for the `Verify site and server` workflow on the resulting `main` SHA
 to pass. Production deployment is a separate decision requiring explicit
 approval and the protected `production` GitHub Environment.

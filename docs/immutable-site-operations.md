@@ -398,10 +398,13 @@ release activation or rollback.
 
 The manual `Deploy immutable release` GitHub workflow accepts `dev` or
 `production` and rejects dispatches outside `main`. It finds the successful
-`Immutable site` run whose `head_sha` exactly equals the selected commit,
-downloads that run's artifact, and checks static-assets out at the commit in
-the manifest. Create GitHub Environments named `dev` and `production`, with
-required reviewer approval on production. Configure only:
+`Verify site and server` run whose `head_sha` exactly equals the selected commit,
+then builds, verifies, smoke-tests, and uploads a deployment artifact in its
+own run. The deployment job downloads that tested artifact and checks
+static-assets out at the commit in its manifest. The `Verify site and server` workflow
+does not create or upload release artifacts. Create GitHub Environments named
+`dev` and `production`, with required reviewer approval on production.
+Configure only:
 
 - `GALATA_DEPLOY_SSH_KEY`
 - `GALATA_DEPLOY_HOST`
