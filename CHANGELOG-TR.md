@@ -4,10 +4,10 @@ Bu sürümde dergiyi okuma, kayıtları dinleme ve katkıları keşfetme deneyim
 
 | Nereye bakmalı? | Ne değişti? |
 | --- | --- |
+| [Site haritası](https://galatadergisi.org/sitemap.xml) ve [yayın akışı](https://galatadergisi.org/feed.xml) | SEO altyapısı yenilendi: sayılar, yazılar, görseller, ses kayıtları ve katkıda bulunanlar arama motorlarına daha doğru başlık, açıklama ve bağlantılarla tanıtılıyor; sosyal medya paylaşımlarındaki önizlemeler de zenginleştirildi. |
 | [Ana sayfa](https://galatadergisi.org/) | Dergi rafı ve kapak geçişleri yenilendi; kapaklar daha hızlı yükleniyor, klavye ile gezinmek kolaylaştı. |
-| [Bir dergi sayısı](https://galatadergisi.org/dergiler/sayi45) | Yeni sayfa çevirme deneyimi, daha anlaşılır yüklenme/hata durumları ve düzgün çalışan Geri–İleri gezinmesi eklendi. Ön ve arka kapaklar da artık kendi sayfalarında ortalanıyor. |
-| [Ses Makinesi](https://galatadergisi.org/dergiler/sayi45/35) | Oynatıcı yenilendi: kayıtlar arasında geçiş, ilerleme ve ses denetimleri iyileştirildi; kesilen veya takılan kayıtlar için yeniden deneme davranışı eklendi. |
+| [Bir dergi sayısı](https://galatadergisi.org/dergiler/sayi44) | Yeni sayfa çevirme deneyimi, daha anlaşılır yüklenme/hata durumları ve düzgün çalışan Geri–İleri gezinmesi eklendi. Ön ve arka kapaklar da artık kendi sayfalarında ortalanıyor. |
+| [Ses Makinesi](https://galatadergisi.org/dergiler/sayi44/44) | Oynatıcı yenilendi: kayıtlar arasında geçiş, ilerleme ve ses denetimleri iyileştirildi; kesilen veya takılan kayıtlar için yeniden deneme davranışı eklendi. |
 | [Katkıda bulunan profili](https://galatadergisi.org/katkida-bulunanlar/9-semih-bozkurt) | Yazılı, görsel, kapak ve sesli katkılar ayrı başlıklarda; sayıları ve kapsadıkları dergi aralığıyla gösteriliyor. Uzun listelerde arama yapılabiliyor. |
 | [Katkıda bulunma formu](https://galatadergisi.org/katkida-bulunun) | İçerik ve dosya seçimi, doğrulama mesajları ve klavye kullanımı daha açık ve erişilebilir hâle getirildi. |
-| [Site haritası](https://galatadergisi.org/sitemap.xml) ve [yayın akışı](https://galatadergisi.org/feed.xml) | SEO altyapısı yenilendi: sayılar, yazılar, görseller, ses kayıtları ve katkıda bulunanlar arama motorlarına daha doğru başlık, açıklama ve bağlantılarla tanıtılıyor; sosyal medya paylaşımlarındaki önizlemeler de zenginleştirildi. |
 
