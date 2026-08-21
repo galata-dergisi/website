@@ -26,8 +26,12 @@ stage_release() {
   install -m 0755 "$fixture" "$staged/galata-server"
   binary_hash=$(sha256sum "$staged/galata-server" | awk '{print $1}')
   inventory_hash=$(sha256sum "$staged/MEDIA-SHA256SUMS" | awk '{print $1}')
+  printf 'format=1\n%s  /\n' \
+    dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \
+    > "$staged/CACHE-PURGE-MANIFEST"
+  cache_purge_hash=$(sha256sum "$staged/CACHE-PURGE-MANIFEST" | awk '{print $1}')
   {
-    printf 'format=1\n'
+    printf 'format=2\n'
     printf 'release_id=%s\n' "$release_id"
     printf 'application_commit=%s\n' "$app_commit"
     printf 'static_assets_commit=%s\n' "$static_commit"
@@ -36,6 +40,7 @@ stage_release() {
     printf 'binary_amd64_sha256=%s\n' "$binary_hash"
     printf 'binary_arm64_sha256=%s\n' "$binary_hash"
     printf 'media_inventory_sha256=%s\n' "$inventory_hash"
+    printf 'cache_purge_manifest_sha256=%s\n' "$cache_purge_hash"
   } > "$staged/RELEASE-MANIFEST"
 }
 
@@ -66,6 +71,7 @@ install -d -m 0755 \
   /opt/galata/releases \
   /var/lib/galata-deploy/incoming \
   /var/lib/galata-deploy/history \
+  /var/lib/galata-deploy/cache-purge-pending \
   /var/lib/galata-deploy-processing \
   /var/www/galata-media/releases \
   /var/www/galatadergisi.org \
@@ -81,12 +87,41 @@ chmod 0600 /etc/galata/production.env /etc/galata/dev.env
 systemctl daemon-reload
 
 stage_release production
+production_activation=$(SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
+  activate production "$release_id")
+printf '%s\n' "$production_activation" | grep -Fxq cache_purge_plan_format=1 \
+  || fail "production activation omitted the cache plan format"
+printf '%s\n' "$production_activation" | grep -Fxq cache_purge_path=/ \
+  || fail "first production activation did not purge the stable homepage"
 SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
-  activate production "$release_id"
+  ack-cache-purge production "$release_id" >/dev/null
 
 stage_release dev
+dev_activation=$(SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
+  activate dev "$release_id")
+printf '%s\n' "$dev_activation" | grep -Fxq cache_purge_plan_format=1 \
+  || fail "dev activation omitted the cache plan format"
+printf '%s\n' "$dev_activation" | grep -Fxq cache_purge_path=/ \
+  || fail "first dev activation did not purge the stable homepage"
+
+stage_release dev
+retry_activation=$(SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
+  activate dev "$release_id")
+printf '%s\n' "$retry_activation" | grep -Fxq cache_purge_path=/ \
+  || fail "unacknowledged dev cache purge was not retained for retry"
 SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
-  activate dev "$release_id"
+  ack-cache-purge dev "$release_id" >/dev/null
+
+stage_release dev
+unchanged_activation=$(SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
+  activate dev "$release_id")
+printf '%s\n' "$unchanged_activation" | grep -Fxq cache_purge_plan_format=1 \
+  || fail "unchanged activation omitted the cache plan format"
+if printf '%s\n' "$unchanged_activation" | grep -q '^cache_purge_path='; then
+  fail "unchanged activation requested a cache purge"
+fi
+SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
+  ack-cache-purge dev "$release_id" >/dev/null
 
 assert_media_publication /var/www/galatadergisi.org/public
 assert_media_publication /var/www/dev.galatadergisi.org/public

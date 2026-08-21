@@ -232,11 +232,21 @@ branch during this assessment. Rerun `deploy-server.sh configure` only if one
 of those tracked files subsequently changes or a hash comparison proves drift;
 `configure` now takes no feature-specific secret option.
 
+The URL-specific purge release introduces a new helper capability and pending
+plan directory. Run `./ops/deploy-server.sh configure` once from the updated
+checkout before its first deployment. This installs the helper change on
+`galata`; Cloudflare API credentials remain on the deployment client and are
+never copied to the VPS.
+
 ## 7. Deploy only the dev slot
 
 From the clean candidate checkout, run the interactive first deployment:
 
 ```sh
+export CLOUDFLARE_ZONE_ID='<32-character zone id>'
+read -r -s CLOUDFLARE_CACHE_PURGE_TOKEN
+export CLOUDFLARE_CACHE_PURGE_TOKEN
+
 ./ops/deploy-server.sh deploy dev \
   --release-dir release \
   --media-root ../galata-dergisi-static-assets/server-assets/public
@@ -289,7 +299,8 @@ After uncached acceptance succeeds, the dev-only rules in
 [`../ops/cloudflare/README.md`](../ops/cloudflare/README.md) may be applied and
 verified. Keep every rule restricted to `dev.galatadergisi.org`; do not add the
 apex or `www` hostnames before an approved production cutover. Repeat the Access
-denial test after enabling caching.
+denial test after enabling caching. Once caching is enabled, deploy and rollback
+automatically purge only changed stable paths from the tracked cache policy.
 
 Exercise rollback while the release is still confined to dev. A rollback needs
 two retained dev releases, so deploy a second reviewed candidate or redeploy

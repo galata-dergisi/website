@@ -67,6 +67,9 @@ jobs:
       - name: Run service-worker lifecycle tests
         run: npm run test:service-worker
 
+      - name: Run deployment and cache-purge unit tests
+        run: node --test tests/cache-purge-manifest.test.mjs tests/deploy-server.test.mjs
+
       - name: Run native page-turn browser parity tests
         run: npm run test:page-turn
 

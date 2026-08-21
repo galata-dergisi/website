@@ -34,11 +34,17 @@ function createHarness() {
   writeExecutable(path.join(bin, 'ssh'), `#!/bin/sh
 printf 'ssh %s\n' "$*" >> "$FAKE_LOG"
 case "$*" in
-  *'galata-deploy-helper status'*) printf '%s\n' architecture=amd64 cache_bytes=0 ;;
+  *'galata-deploy-helper status'*) printf '%s\n' architecture=amd64 cache_bytes=0 cache_plan_format=2 ;;
   *'df -Pk'*) printf '%s\n' "$FAKE_AVAILABLE" ;;
   *'galata-deploy-helper verify'*) printf '%s\\n' "\${FAKE_VERIFY_OUTPUT:-verified}" ;;
-  *'galata-deploy-helper activate'*) printf '%s\n' activated ;;
-  *'galata-deploy-helper rollback'*) printf '%s\n' rolled-back ;;
+  *'galata-deploy-helper activate'*)
+    printf '%s\n' activated cache_purge_plan_format=1 cache_purge_release=aaaaaaaaaaaa-bbbbbbbbbbbbbbbb
+    for path in \${FAKE_CACHE_PURGE_PATHS-/}; do printf 'cache_purge_path=%s\n' "$path"; done
+    ;;
+  *'galata-deploy-helper rollback'*)
+    printf '%s\n' rolled-back cache_purge_plan_format=1 cache_purge_release=aaaaaaaaaaaa-bbbbbbbbbbbbbbbb
+    for path in \${FAKE_CACHE_PURGE_PATHS-/}; do printf 'cache_purge_path=%s\n' "$path"; done
+    ;;
 esac
 exit 0
 `);
@@ -48,6 +54,11 @@ printf 'rsync %s\n' "$*" >> "$FAKE_LOG"
 exit 0
 `);
   writeExecutable(path.join(bin, 'curl'), `#!/bin/sh
+for argument in "$@"; do
+  case "$argument" in
+    @*) printf 'curl-body ' >> "$FAKE_LOG"; cat "\${argument#@}" >> "$FAKE_LOG" ;;
+  esac
+done
 printf '%s' "\${FAKE_CURL_OUTPUT:-}"
 exit "\${FAKE_CURL_STATUS:-0}"
 `);
@@ -60,10 +71,13 @@ exit "\${FAKE_CURL_STATUS:-0}"
       PATH: `${bin}:${process.env.PATH}`,
       FAKE_LOG: log,
       FAKE_AVAILABLE: '999999999',
+      FAKE_CURL_OUTPUT: '{"success":true}',
       GALATA_DEPLOY_HOST: 'example.invalid',
       GALATA_DEPLOY_PORT: '22',
       GALATA_DEPLOY_SSH_KEY_PATH: key,
       GALATA_SSH_KNOWN_HOSTS_FILE: knownHosts,
+      CLOUDFLARE_ZONE_ID: 'f'.repeat(32),
+      CLOUDFLARE_CACHE_PURGE_TOKEN: 'test-cache-purge-token',
     },
     cleanup() { fs.rmSync(root, { recursive: true, force: true }); },
   };
@@ -96,11 +110,13 @@ function createRelease(harness) {
   fs.writeFileSync(path.join(release, 'MEDIA-SHA256SUMS'), inventory);
   fs.writeFileSync(path.join(release, 'galata-server-linux-amd64'), 'amd64', { mode: 0o755 });
   fs.writeFileSync(path.join(release, 'galata-server-linux-arm64'), 'arm64', { mode: 0o755 });
+  const cachePurgeManifest = `format=1\n${sha256('homepage')}  /\n`;
+  fs.writeFileSync(path.join(release, 'CACHE-PURGE-MANIFEST'), cachePurgeManifest);
   const appCommit = 'a'.repeat(40);
   const siteRelease = 'b'.repeat(16);
   const releaseId = `${appCommit.slice(0, 12)}-${siteRelease}`;
   const manifest = [
-    'format=1',
+    'format=2',
     `release_id=${releaseId}`,
     `application_commit=${appCommit}`,
     `static_assets_commit=${staticCommit}`,
@@ -109,12 +125,14 @@ function createRelease(harness) {
     `binary_amd64_sha256=${sha256('amd64')}`,
     `binary_arm64_sha256=${sha256('arm64')}`,
     `media_inventory_sha256=${sha256(inventory)}`,
+    `cache_purge_manifest_sha256=${sha256(cachePurgeManifest)}`,
   ].join('\n') + '\n';
   fs.writeFileSync(path.join(release, 'RELEASE-MANIFEST'), manifest);
   const sums = [
     `${sha256('amd64')}  galata-server-linux-amd64`,
     `${sha256('arm64')}  galata-server-linux-arm64`,
     `${sha256(inventory)}  MEDIA-SHA256SUMS`,
+    `${sha256(cachePurgeManifest)}  CACHE-PURGE-MANIFEST`,
     `${sha256(manifest)}  RELEASE-MANIFEST`,
   ].join('\n') + '\n';
   fs.writeFileSync(path.join(release, 'SHA256SUMS'), sums);
@@ -208,7 +226,82 @@ test('a valid deployment uploads only the selected binary and immutable inventor
     assert.match(result.stdout, /Uploading application bundle/);
     assert.match(result.stdout, /Uploading media \(2 files,/);
     assert.match(log, /galata-deploy-helper activate 'dev' 'aaaaaaaaaaaa-bbbbbbbbbbbbbbbb'/);
+    assert.match(log, /curl-body \{"files":\["https:\/\/dev\.galatadergisi\.org\/"\]\}/);
+    assert.match(result.stdout, /Purged https:\/\/dev\.galatadergisi\.org\//);
+    assert.match(
+      log,
+      /galata-deploy-helper ack-cache-purge 'dev' 'aaaaaaaaaaaa-bbbbbbbbbbbbbbbb'/,
+    );
     assert.doesNotMatch(log, /galata-server-linux-arm64/);
+  } finally { harness.cleanup(); }
+});
+
+test('production purges both hostnames and unchanged stable URLs skip the API', () => {
+  const changed = createHarness();
+  try {
+    const fixture = createRelease(changed);
+    const result = invoke(
+      changed, 'deploy', 'production', '--release-dir', fixture.release,
+      '--media-root', fixture.media, '--yes',
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const log = fs.readFileSync(changed.log, 'utf8');
+    assert.match(
+      log,
+      /curl-body \{"files":\["https:\/\/galatadergisi\.org\/","https:\/\/www\.galatadergisi\.org\/"\]\}/,
+    );
+  } finally { changed.cleanup(); }
+
+  const unchanged = createHarness();
+  unchanged.environment.FAKE_CACHE_PURGE_PATHS = '';
+  try {
+    const fixture = createRelease(unchanged);
+    const result = invoke(
+      unchanged, 'deploy', 'dev', '--release-dir', fixture.release,
+      '--media-root', fixture.media, '--yes',
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /No changed stable cache URLs/);
+    const log = fs.readFileSync(unchanged.log, 'utf8');
+    assert.doesNotMatch(log, /curl-body/);
+    assert.match(log, /galata-deploy-helper ack-cache-purge 'dev'/);
+  } finally { unchanged.cleanup(); }
+});
+
+test('a failed Cloudflare purge leaves the remote plan unacknowledged for retry', () => {
+  const harness = createHarness();
+  harness.environment.FAKE_CURL_OUTPUT = '{"success":false,"errors":[{"message":"denied"}]}';
+  try {
+    const fixture = createRelease(harness);
+    const result = invoke(
+      harness, 'deploy', 'dev', '--release-dir', fixture.release,
+      '--media-root', fixture.media, '--yes',
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Cloudflare rejected the URL purge/);
+    assert.doesNotMatch(
+      fs.readFileSync(harness.log, 'utf8'),
+      /galata-deploy-helper ack-cache-purge/,
+    );
+  } finally { harness.cleanup(); }
+});
+
+test('Cloudflare URL purges are split at the 100-operation API limit', () => {
+  const harness = createHarness();
+  harness.environment.FAKE_CACHE_PURGE_PATHS = Array.from(
+    { length: 51 }, (_, index) => `/page-${String(index).padStart(2, '0')}`,
+  ).join(' ');
+  try {
+    const fixture = createRelease(harness);
+    const result = invoke(
+      harness, 'deploy', 'production', '--release-dir', fixture.release,
+      '--media-root', fixture.media, '--yes',
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const log = fs.readFileSync(harness.log, 'utf8');
+    assert.equal((log.match(/curl-body/g) || []).length, 2);
+    assert.match(log, /https:\/\/galatadergisi\.org\/page-00/);
+    assert.match(log, /https:\/\/www\.galatadergisi\.org\/page-50/);
   } finally { harness.cleanup(); }
 });
 
@@ -363,10 +456,12 @@ test('deployment builds and tests its own artifact while preserving provenance',
   assert.match(workflow, /ref: \$\{\{ steps\.provenance\.outputs\.static_commit \}\}/);
   assert.match(workflow, /environment: \$\{\{ inputs\.target \}\}/);
   assert.match(workflow, /group: galata-vps-deployment/);
-  assert.doesNotMatch(
+  assert.match(workflow, /CLOUDFLARE_ZONE_ID: \$\{\{ secrets\.CLOUDFLARE_ZONE_ID \}\}/);
+  assert.match(
     workflow,
-    /secrets\.(?:CLOUDFLARE|BASIC_AUTH)/,
+    /CLOUDFLARE_CACHE_PURGE_TOKEN: \$\{\{ secrets\.CLOUDFLARE_CACHE_PURGE_TOKEN \}\}/,
   );
+  assert.doesNotMatch(workflow, /secrets\.BASIC_AUTH/);
   assert.match(verificationWorkflow, /name: Verify site and server/);
   assert.match(verificationWorkflow, /token: \$\{\{ secrets\.STATIC_ASSETS_TOKEN \}\}/);
   assert.match(verificationWorkflow, /persist-credentials: false/);

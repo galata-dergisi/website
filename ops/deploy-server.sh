@@ -25,7 +25,9 @@ Usage:
 
 Local operation uses the trusted SSH alias "galata". Set GALATA_DEPLOY_HOST,
 GALATA_DEPLOY_PORT, GALATA_DEPLOY_SSH_KEY_PATH, and GALATA_SSH_KNOWN_HOSTS_FILE
-in CI. Secret-setup commands are deliberately interactive and workstation-only.
+in CI. Deploy and rollback require CLOUDFLARE_ZONE_ID and the dedicated
+CLOUDFLARE_CACHE_PURGE_TOKEN. Secret-setup commands are deliberately
+interactive and workstation-only.
 EOF
 }
 
@@ -137,20 +139,20 @@ validate_local_release() {
     [[ -f $artifact && ! -L $artifact ]] || die "release output contains a non-regular artifact"
     name=$(basename "$artifact")
     case $name in
-      RELEASE-MANIFEST|MEDIA-SHA256SUMS|SHA256SUMS|\
+      RELEASE-MANIFEST|MEDIA-SHA256SUMS|CACHE-PURGE-MANIFEST|SHA256SUMS|\
       galata-server-linux-amd64|galata-server-linux-arm64|\
       galata-server-linux-amd64.buildinfo|galata-server-linux-arm64.buildinfo) ;;
       *) die "unexpected release artifact: $name" ;;
     esac
   done < <(find "$release_dir" -mindepth 1 -maxdepth 1 -print)
-  for name in RELEASE-MANIFEST MEDIA-SHA256SUMS SHA256SUMS \
+  for name in RELEASE-MANIFEST MEDIA-SHA256SUMS CACHE-PURGE-MANIFEST SHA256SUMS \
       galata-server-linux-amd64 galata-server-linux-arm64; do
     [[ -f $release_dir/$name && ! -L $release_dir/$name ]] || die "release output lacks $name"
   done
-  [[ $(wc -l < "$release_dir/SHA256SUMS" | tr -d ' ') == 4 ]] \
-    || die "release checksum file must contain four entries"
+  [[ $(wc -l < "$release_dir/SHA256SUMS" | tr -d ' ') == 5 ]] \
+    || die "release checksum file must contain five entries"
   for name in galata-server-linux-amd64 galata-server-linux-arm64 \
-      MEDIA-SHA256SUMS RELEASE-MANIFEST; do
+      MEDIA-SHA256SUMS CACHE-PURGE-MANIFEST RELEASE-MANIFEST; do
     [[ $(grep -Ec "^[0-9a-f]{64}  ${name}$" "$release_dir/SHA256SUMS") == 1 ]] \
       || die "release checksum file lacks a strict $name entry"
   done
@@ -160,8 +162,8 @@ validate_local_release() {
     (cd "$release_dir" && shasum -a 256 -c SHA256SUMS >/dev/null) || die "release checksum file failed"
   fi
   [[ -f $manifest && ! -L $manifest ]] || die "RELEASE-MANIFEST is missing"
-  [[ $(wc -l < "$manifest" | tr -d ' ') == 9 ]] || die "manifest must contain nine fields"
-  [[ $(manifest_value format "$manifest") == 1 ]] || die "unsupported manifest format"
+  [[ $(wc -l < "$manifest" | tr -d ' ') == 10 ]] || die "manifest must contain ten fields"
+  [[ $(manifest_value format "$manifest") == 2 ]] || die "unsupported manifest format"
   RELEASE_ID=$(manifest_value release_id "$manifest"); valid_release_id "$RELEASE_ID"
   APP_COMMIT=$(manifest_value application_commit "$manifest")
   STATIC_COMMIT=$(manifest_value static_assets_commit "$manifest")
@@ -179,7 +181,11 @@ validate_local_release() {
   done
   MEDIA_INVENTORY_HASH=$(manifest_value media_inventory_sha256 "$manifest")
   [[ $MEDIA_INVENTORY_HASH =~ ^[0-9a-f]{64}$ ]] || die "media inventory hash is invalid"
+  CACHE_PURGE_MANIFEST_HASH=$(manifest_value cache_purge_manifest_sha256 "$manifest")
+  [[ $CACHE_PURGE_MANIFEST_HASH =~ ^[0-9a-f]{64}$ ]] || die "cache purge manifest hash is invalid"
   [[ -f $release_dir/MEDIA-SHA256SUMS && ! -L $release_dir/MEDIA-SHA256SUMS ]] || die "media inventory is missing"
+  [[ -f $release_dir/CACHE-PURGE-MANIFEST && ! -L $release_dir/CACHE-PURGE-MANIFEST ]] \
+    || die "cache purge manifest is missing"
   [[ -d $media_root/images && -d $media_root/audio ]] || die "media root must contain images/ and audio/"
   [[ $(git -C "$media_root" rev-parse HEAD) == "$STATIC_COMMIT" ]] || die "media checkout is not the manifest commit"
   [[ -z $(git -C "$media_root" status --porcelain --untracked-files=normal) ]] \
@@ -190,7 +196,129 @@ validate_local_release() {
   local actual_media_hash
   actual_media_hash=$(sha_local "$release_dir/MEDIA-SHA256SUMS")
   [[ $actual_media_hash == "$MEDIA_INVENTORY_HASH" ]] || die "media inventory hash does not match the manifest"
+  [[ $(sha_local "$release_dir/CACHE-PURGE-MANIFEST") == "$CACHE_PURGE_MANIFEST_HASH" ]] \
+    || die "cache purge manifest hash does not match the release manifest"
+  validate_cache_purge_manifest "$release_dir/CACHE-PURGE-MANIFEST"
   verify_media_inventory "$release_dir/MEDIA-SHA256SUMS" "$media_root"
+}
+
+validate_cache_purge_manifest() {
+  local manifest=$1 line line_number=0 hash stable_path previous_path=
+  [[ -f $manifest && ! -L $manifest ]] || die "cache purge manifest is not a regular file"
+  while IFS= read -r line || [[ -n $line ]]; do
+    line_number=$((line_number + 1))
+    if (( line_number == 1 )); then
+      [[ $line == format=1 ]] || die "unsupported cache purge manifest format"
+      continue
+    fi
+    [[ $line =~ ^([0-9a-f]{64})\ \ (/[^[:space:]]*)$ ]] \
+      || die "malformed cache purge manifest entry"
+    hash=${BASH_REMATCH[1]}; stable_path=${BASH_REMATCH[2]}
+    [[ $hash =~ ^[0-9a-f]{64}$ && $stable_path =~ ^/[A-Za-z0-9._~%/-]*$ ]] \
+      || die "unsafe cache purge manifest entry"
+    [[ $stable_path != *'//'* && $stable_path != *'/./'* && $stable_path != *'/../'* \
+      && $stable_path != */. && $stable_path != */.. ]] \
+      || die "unsafe cache purge path: $stable_path"
+    [[ -z $previous_path || $stable_path > $previous_path ]] \
+      || die "cache purge manifest paths must be sorted and unique"
+    previous_path=$stable_path
+  done < "$manifest"
+  (( line_number >= 1 )) || die "cache purge manifest is empty"
+}
+
+require_cloudflare_cache_purge_config() {
+  [[ ${CLOUDFLARE_ZONE_ID:-} =~ ^[A-Fa-f0-9]{32}$ ]] \
+    || die "CLOUDFLARE_ZONE_ID must be a 32-character zone id"
+  [[ ${CLOUDFLARE_CACHE_PURGE_TOKEN:-} =~ ^[A-Za-z0-9._-]+$ ]] \
+    || die "CLOUDFLARE_CACHE_PURGE_TOKEN is missing or malformed"
+}
+
+require_cache_plan_capability() {
+  local status=$1
+  [[ $(sed -n 's/^cache_plan_format=//p' <<< "$status") == 2 ]] \
+    || die "remote deployment helper lacks retry-safe cache planning; run deploy-server.sh configure"
+}
+
+purge_cloudflare_cache() {
+  local slot=$1 activation_output=$2 marker_count release_count purge_release
+  local line stable_path hostname previous_path= url offset index batch_end
+  local -a paths=() hostnames=() urls=()
+  local request_file response first
+  marker_count=$(grep -c '^cache_purge_plan_format=1$' <<< "$activation_output" || true)
+  [[ $marker_count == 1 ]] || die "activation returned an invalid cache purge plan"
+  release_count=$(grep -c '^cache_purge_release=' <<< "$activation_output" || true)
+  [[ $release_count == 1 ]] || die "activation returned an invalid cache purge release"
+  purge_release=$(sed -n 's/^cache_purge_release=//p' <<< "$activation_output")
+  valid_release_id "$purge_release"
+  while IFS= read -r line; do
+    [[ $line == cache_purge_path=* ]] || continue
+    stable_path=${line#cache_purge_path=}
+    [[ $stable_path =~ ^/[A-Za-z0-9._~%/-]*$ \
+      && $stable_path != *'//'* && $stable_path != *'/./'* && $stable_path != *'/../'* \
+      && $stable_path != */. && $stable_path != */.. ]] \
+      || die "activation returned an unsafe cache purge path"
+    [[ -z $previous_path || $stable_path > $previous_path ]] \
+      || die "activation returned unsorted or duplicate cache purge paths"
+    paths+=("$stable_path")
+    previous_path=$stable_path
+  done <<< "$activation_output"
+  if (( ${#paths[@]} == 0 )); then
+    deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper ack-cache-purge '$slot' '$purge_release'" \
+      || die "remote cache purge acknowledgement failed; the next deploy will retry safely"
+    note "No changed stable cache URLs; Cloudflare purge skipped"
+    return
+  fi
+  if [[ $slot == dev ]]; then
+    hostnames=(dev.galatadergisi.org)
+  else
+    hostnames=(galatadergisi.org www.galatadergisi.org)
+  fi
+  for hostname in "${hostnames[@]}"; do
+    for stable_path in "${paths[@]}"; do
+      urls+=("https://$hostname$stable_path")
+    done
+  done
+  for ((offset = 0; offset < ${#urls[@]}; offset += 100)); do
+    batch_end=$((offset + 100))
+    (( batch_end <= ${#urls[@]} )) || batch_end=${#urls[@]}
+    request_file=$(mktemp "${TMPDIR:-/tmp}/galata-cloudflare-purge.XXXXXX")
+    chmod 0600 "$request_file"
+    first=true
+    printf '{"files":[' > "$request_file"
+    for ((index = offset; index < batch_end; index += 1)); do
+      if [[ $first == true ]]; then first=false; else printf ',' >> "$request_file"; fi
+      url=${urls[$index]}
+      printf '"%s"' "$url" >> "$request_file"
+    done
+    printf ']}\n' >> "$request_file"
+    if ! response=$(curl --fail-with-body --silent --show-error --retry 3 \
+        --request POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+        --header "Authorization: Bearer $CLOUDFLARE_CACHE_PURGE_TOKEN" \
+        --header 'Content-Type: application/json' \
+        --data-binary "@$request_file"); then
+      rm -f "$request_file"
+      die "Cloudflare URL purge request failed"
+    fi
+    rm -f "$request_file"
+    if ! printf '%s' "$response" | node -e '
+      let input = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => { input += chunk; });
+      process.stdin.on("end", () => {
+        try { if (JSON.parse(input).success !== true) process.exitCode = 1; }
+        catch { process.exitCode = 1; }
+      });
+    '; then
+      die "Cloudflare rejected the URL purge: $response"
+    fi
+  done
+  deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper ack-cache-purge '$slot' '$purge_release'" \
+    || die "Cloudflare purge succeeded but acknowledgement failed; the next deploy will retry safely"
+  for hostname in "${hostnames[@]}"; do
+    for stable_path in "${paths[@]}"; do
+      note "Purged https://$hostname$stable_path"
+    done
+  done
 }
 
 sha_local() {
@@ -337,7 +465,8 @@ tunnel_command() {
 }
 
 deploy_command() {
-  local slot=${1:-}; shift || true; local release_dir= media_root= argument architecture binary expected actual
+  local slot=${1:-}; shift || true
+  local release_dir= media_root= argument architecture binary expected actual remote_status activation_output
   YES=false; valid_slot "$slot"
   while [[ $# -gt 0 ]]; do
     argument=$1; shift
@@ -349,10 +478,13 @@ deploy_command() {
     esac
   done
   [[ -n $release_dir && -n $media_root ]] || die "deploy needs --release-dir and --media-root"
+  require_cloudflare_cache_purge_config
   release_dir=$(cd "$release_dir" && pwd); media_root=$(cd "$media_root" && pwd)
   validate_local_release "$release_dir" "$media_root"
   deploy_connection
-  architecture=$(deploy_ssh 'sudo -n /usr/local/sbin/galata-deploy-helper status' | sed -n 's/^architecture=//p')
+  remote_status=$(deploy_ssh 'sudo -n /usr/local/sbin/galata-deploy-helper status')
+  require_cache_plan_capability "$remote_status"
+  architecture=$(sed -n 's/^architecture=//p' <<< "$remote_status")
   [[ $architecture == amd64 || $architecture == arm64 ]] || die "unsupported remote architecture: $architecture"
   binary="$release_dir/galata-server-linux-$architecture"; [[ -f $binary && ! -L $binary ]] || die "matching binary is missing"
   expected=$(manifest_value "binary_${architecture}_sha256" "$release_dir/RELEASE-MANIFEST")
@@ -360,7 +492,9 @@ deploy_command() {
   preflight_space "$release_dir" "$media_root"
   confirm "Deploy $RELEASE_ID to $slot?"
   upload_release "$release_dir" "$media_root" "$binary"
-  deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper activate '$slot' '$RELEASE_ID'"
+  activation_output=$(deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper activate '$slot' '$RELEASE_ID'")
+  printf '%s\n' "$activation_output"
+  purge_cloudflare_cache "$slot" "$activation_output"
 }
 
 preflight_space() {
@@ -392,7 +526,8 @@ upload_release() {
   local progress_args=(--progress --human-readable --stats)
   stage=$(mktemp -d "${TMPDIR:-/tmp}/galata-release.XXXXXX"); chmod 0700 "$stage"
   cp "$binary" "$stage/galata-server"
-  cp "$release_dir/RELEASE-MANIFEST" "$release_dir/MEDIA-SHA256SUMS" "$stage/"
+  cp "$release_dir/RELEASE-MANIFEST" "$release_dir/MEDIA-SHA256SUMS" \
+    "$release_dir/CACHE-PURGE-MANIFEST" "$stage/"
   deploy_ssh "install -d -m 0750 '/var/lib/galata-deploy/incoming/$RELEASE_ID-$slot/media' /var/lib/galata-deploy/media-cache"
   ssh_shell=$(rsync_shell)
   if rsync --info=progress2 --version >/dev/null 2>&1; then
@@ -449,16 +584,24 @@ verify_command() {
 }
 
 rollback_command() {
-  local slot=${1:-}; shift || true; local release= argument
+  local slot=${1:-}; shift || true; local release= argument remote_status activation_output
   YES=false; valid_slot "$slot"
   while [[ $# -gt 0 ]]; do
     argument=$1; shift
     case $argument in --yes) YES=true ;; *) [[ -z $release ]] || die "too many rollback arguments"; release=$argument; valid_release_id "$release" ;; esac
   done
+  require_cloudflare_cache_purge_config
   confirm "Rollback $slot${release:+ to $release}?"
   deploy_connection
-  if [[ -n $release ]]; then deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper rollback '$slot' '$release'"
-  else deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper rollback '$slot'"; fi
+  remote_status=$(deploy_ssh 'sudo -n /usr/local/sbin/galata-deploy-helper status')
+  require_cache_plan_capability "$remote_status"
+  if [[ -n $release ]]; then
+    activation_output=$(deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper rollback '$slot' '$release'")
+  else
+    activation_output=$(deploy_ssh "sudo -n /usr/local/sbin/galata-deploy-helper rollback '$slot'")
+  fi
+  printf '%s\n' "$activation_output"
+  purge_cloudflare_cache "$slot" "$activation_output"
 }
 
 command=${1:-}

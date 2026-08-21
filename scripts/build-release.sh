@@ -73,12 +73,16 @@ done
   || die "media contains a symlink, special file, or invalid filename"
 [ -s "$release_dir/MEDIA-SHA256SUMS" ] || die "media inventory is empty"
 
+node scripts/generate-cache-purge-manifest.mjs "$release_dir/CACHE-PURGE-MANIFEST" \
+  || die "could not generate the cache purge manifest"
+
 amd64_sha=$(sha256_file "$release_dir/galata-server-linux-amd64")
 arm64_sha=$(sha256_file "$release_dir/galata-server-linux-arm64")
 media_sha=$(sha256_file "$release_dir/MEDIA-SHA256SUMS")
+cache_manifest_sha=$(sha256_file "$release_dir/CACHE-PURGE-MANIFEST")
 
 {
-  printf '%s\n' 'format=1'
+  printf '%s\n' 'format=2'
   printf 'release_id=%s\n' "$release_id"
   printf 'application_commit=%s\n' "$application_commit"
   printf 'static_assets_commit=%s\n' "$static_assets_commit"
@@ -87,16 +91,17 @@ media_sha=$(sha256_file "$release_dir/MEDIA-SHA256SUMS")
   printf 'binary_amd64_sha256=%s\n' "$amd64_sha"
   printf 'binary_arm64_sha256=%s\n' "$arm64_sha"
   printf 'media_inventory_sha256=%s\n' "$media_sha"
+  printf 'cache_purge_manifest_sha256=%s\n' "$cache_manifest_sha"
 } > "$release_dir/RELEASE-MANIFEST"
 
 (
   cd "$release_dir"
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum galata-server-linux-amd64 galata-server-linux-arm64 \
-      MEDIA-SHA256SUMS RELEASE-MANIFEST > SHA256SUMS
+      MEDIA-SHA256SUMS CACHE-PURGE-MANIFEST RELEASE-MANIFEST > SHA256SUMS
   else
     shasum -a 256 galata-server-linux-amd64 galata-server-linux-arm64 \
-      MEDIA-SHA256SUMS RELEASE-MANIFEST > SHA256SUMS
+      MEDIA-SHA256SUMS CACHE-PURGE-MANIFEST RELEASE-MANIFEST > SHA256SUMS
   fi
 )
 

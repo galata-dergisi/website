@@ -113,6 +113,7 @@ jobs:
             release/galata-server-linux-*
             release/RELEASE-MANIFEST
             release/MEDIA-SHA256SUMS
+            release/CACHE-PURGE-MANIFEST
             release/SHA256SUMS
           if-no-files-found: error
 
@@ -168,6 +169,8 @@ jobs:
           GALATA_DEPLOY_PORT: ${{ secrets.GALATA_DEPLOY_PORT }}
           GALATA_DEPLOY_SSH_KEY_PATH: ${{ runner.temp }}/galata-ssh/deploy-key
           GALATA_SSH_KNOWN_HOSTS_FILE: ${{ runner.temp }}/galata-ssh/known_hosts
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
         run: |
           ./ops/deploy-server.sh deploy "${{ inputs.target }}" \
             --release-dir release \

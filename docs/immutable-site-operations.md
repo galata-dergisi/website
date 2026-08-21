@@ -236,11 +236,14 @@ cd release
 shasum -a 256 -c SHA256SUMS
 ```
 
-The output contains Linux `amd64` and `arm64` binaries, `RELEASE-MANIFEST`, and
-`MEDIA-SHA256SUMS`. Release creation requires clean application and
-static-assets checkouts. The manifest binds both commits, the embedded site
-release, supported architectures, binary hashes, and the SHA-256 inventory of
-the deployed `images/` and `audio/` trees. On the target host,
+The output contains Linux `amd64` and `arm64` binaries, `RELEASE-MANIFEST`,
+`MEDIA-SHA256SUMS`, and `CACHE-PURGE-MANIFEST`. Release creation requires clean
+application and static-assets checkouts. The release manifest binds both
+commits, the embedded site release, supported architectures, binary hashes,
+the SHA-256 inventory of the deployed `images/` and `audio/` trees, and the
+cache-purge manifest. That cache manifest records generated response hashes for
+the stable paths declared in `ops/cloudflare/cache-policy.json`. On the target
+host,
 `uname -m` reports `x86_64` for `amd64` and `aarch64`/`arm64` for `arm64`.
 When a protected private-content archive is available during release review,
 it can be supplied explicitly to the private-value scanner:
@@ -298,6 +301,10 @@ exposed directly.
 For a locally built clean release:
 
 ```sh
+export CLOUDFLARE_ZONE_ID='<32-character zone id>'
+read -r -s CLOUDFLARE_CACHE_PURGE_TOKEN
+export CLOUDFLARE_CACHE_PURGE_TOKEN
+
 ./ops/deploy-server.sh deploy dev \
   --release-dir release \
   --media-root ../galata-dergisi-static-assets/server-assets/public
@@ -318,7 +325,11 @@ unchanged files, runs the candidate on a temporary loopback port under systemd
 hardening, atomically switches only the requested slot, and verifies both the
 service and nginx route. Any failure restores the previous code/media pair. A
 VPS `flock` and the workflow concurrency group serialize activation across both
-slots.
+slots. After activation, the client compares cache manifests and purges only
+added, removed, or changed stable URLs: the dev hostname for a dev deployment,
+and both apex and `www` for production. The plan remains on the VPS until
+Cloudflare confirms success, so retrying a failed deploy cannot lose a required
+purge. Versioned assets are excluded because their URL changes with content.
 
 For dev, `verify --public` first verifies the active release through the
 restricted origin connection, then requires the unauthenticated public
@@ -349,11 +360,14 @@ Configure only:
 - `GALATA_DEPLOY_HOST`
 - `GALATA_DEPLOY_PORT`
 - `GALATA_SSH_KNOWN_HOSTS`
+- `CLOUDFLARE_ZONE_ID`
+- `CLOUDFLARE_CACHE_PURGE_TOKEN` (zone-scoped API token with only `Cache Purge`)
 - `STATIC_ASSETS_TOKEN` (fine-grained, read-only, and limited to
   `galata-dergisi/static-assets`)
 
-GitHub never receives the Cloudflare Tunnel token, Access identity, or Access
-session token.
+GitHub's only Cloudflare credential is the dedicated cache-purge token. It
+never receives the Cloudflare Tunnel token, Access identity, or Access session
+token.
 
 ## Dev acceptance and production cutover
 
@@ -365,10 +379,12 @@ private browser session with a disallowed identity and confirm that Access
 denies it.
 
 After an independently approved production deployment, run
-`verify production --public`, purge relevant Cloudflare cache, and monitor
-nginx, `cloudflared`, application health, and errors.
+`verify production --public` and monitor nginx, `cloudflared`, application
+health, errors, and the deployment's URL-purge output. Cache invalidation is
+part of deploy and rollback; no routine dashboard purge follows deployment.
 The deployment scripts never create or alter the remotely managed tunnel,
-published application routes, or Cloudflare edge TLS configuration.
+published application routes, Cache Rules, or Cloudflare edge TLS
+configuration.
 
 ## Release acceptance
 

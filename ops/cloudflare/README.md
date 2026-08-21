@@ -25,7 +25,15 @@ http.host in {
 ```
 
 Keep Cloudflare's default cache key. It includes the hostname and query string,
-so production and Access-protected dev objects remain separate.
+so production and Access-protected dev objects remain separate. The stable-HTML
+rules below match only an empty query string; otherwise unenumerable query
+variants could survive a queryless URL purge.
+
+[`cache-policy.json`](cache-policy.json) is the tracked source of truth for
+stable URLs cached by these rules. It currently contains only `/`. Whenever a
+stable URL is added to or removed from a dashboard Cache Rule, make the same
+change to `stableCachedPaths` in that file. Query-versioned and content-hashed
+assets do not belong in this list.
 
 ## Cache Rules
 
@@ -39,6 +47,7 @@ Dev-only expression:
 http.host eq "dev.galatadergisi.org"
 and http.request.method in {"GET" "PURGE"}
 and http.request.uri.path eq "/"
+and http.request.uri.query eq ""
 ```
 
 Set:
@@ -111,6 +120,7 @@ host and add production hosts only after promotion.
 http.host eq "dev.galatadergisi.org"
 and http.request.method eq "GET"
 and http.request.uri.path eq "/"
+and http.request.uri.query eq ""
 and (
   (http.response.code ge 200 and http.response.code le 299)
   or http.response.code eq 304
@@ -189,19 +199,10 @@ When deploying the release that removes the old submission form:
    `starts_with(http.request.uri.path, "/katkida-bulunun/")` from every Cache
    Rule and Cache Response Rule. The expressions above are the resulting
    configuration.
-2. Purge these exact URLs once, after saving the rules and deploying the
-   release:
-
-   ```text
-   https://galatadergisi.org/katkida-bulunun
-   https://www.galatadergisi.org/katkida-bulunun
-   https://dev.galatadergisi.org/katkida-bulunun
-   ```
-
-3. Delete the Turnstile widget previously used by the form after the production
+2. Delete the Turnstile widget previously used by the form after the production
    release is verified. Retaining it provides no application protection once
    the endpoint is gone.
-4. Remove any separately configured WAF, rate-limiting, redirect, or Access
+3. Remove any separately configured WAF, rate-limiting, redirect, or Access
    rule that targets only `/katkida-bulunun`. The tracked origin configuration
    no longer requires a route-specific edge rule.
 
@@ -210,16 +211,31 @@ deployed application intentionally returns `404` for GET and rejects POST.
 
 ## Deployment purge and verification
 
-For normal releases, purge only the homepage URLs whose HTML was replaced:
+Normal deploys and rollbacks purge automatically. Release creation hashes the
+generated response for every path in `cache-policy.json` and writes
+`CACHE-PURGE-MANIFEST`. Activation compares the target manifest with the
+previous active release and selects only added, removed, or content-changed
+paths. Dev expands those paths onto `dev.galatadergisi.org`; production expands
+them onto the apex and `www` hostnames. Requests are split at Cloudflare's
+100-URL limit.
 
-```text
-https://galatadergisi.org/
-https://www.galatadergisi.org/
-https://dev.galatadergisi.org/
-```
+The server keeps the selected paths pending until every Cloudflare API request
+succeeds and the deployment client acknowledges the active release. A failed
+request, partial batch, lost SSH response, or later redeploy therefore retries
+the complete pending set. Repeating a successful URL purge is harmless. When
+no stable response changed, the deploy records an empty acknowledgement and
+does not call the Cloudflare API.
 
-Use **Custom Purge by URL**, not **Purge Everything**. Versioned assets do not
-need purging.
+The deployment environment requires `CLOUDFLARE_ZONE_ID` and a dedicated
+`CLOUDFLARE_CACHE_PURGE_TOKEN`. Scope the API token to this zone with only the
+`Cache Purge` permission. Do not use the tunnel connector token, Global API
+Key, or a token that can edit zone configuration. Keep the default cache key;
+custom keys involving headers or cookies would require those values in each
+URL purge request.
+
+Use dashboard **Custom Purge by URL** only for incident recovery. Do not make
+**Purge Everything** part of the release process. Versioned assets never need
+release-time purging because a content change produces a new URL.
 
 Verify the homepage with two real GET requests. After a purge, the first will
 normally be `MISS`; the next request from the same Cloudflare location should
@@ -245,4 +261,5 @@ an authenticated browser and separately confirm an unauthenticated
 - [Cache Rules](https://developers.cloudflare.com/cache/how-to/cache-rules/)
 - [Cache Response Rules](https://developers.cloudflare.com/cache/how-to/cache-response-rules/)
 - [Single-file purge](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-single-file/)
+- [Purge Cache API](https://developers.cloudflare.com/api/resources/cache/methods/purge/)
 - [Cloudflare Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/)

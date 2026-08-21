@@ -40,6 +40,7 @@ slot_values() {
     HOSTNAME=dev.galatadergisi.org
   fi
   HISTORY="$DEPLOY_ROOT/history/$1"
+  CACHE_PURGE_PENDING="$DEPLOY_ROOT/cache-purge-pending/$1"
 }
 
 manifest_value() {
@@ -53,8 +54,21 @@ manifest_value() {
 validate_manifest() {
   manifest=$1
   [ -f "$manifest" ] && [ ! -L "$manifest" ] || die "release manifest is not a regular file"
-  [ "$(wc -l < "$manifest" | tr -d ' ')" -eq 9 ] || die "release manifest must have exactly nine fields"
-  [ "$(manifest_value format "$manifest")" = 1 ] || die "unsupported manifest format"
+  MANIFEST_FORMAT=$(manifest_value format "$manifest")
+  case "$MANIFEST_FORMAT" in
+    1)
+      [ "$(wc -l < "$manifest" | tr -d ' ')" -eq 9 ] \
+        || die "format 1 release manifest must have exactly nine fields"
+      CACHE_PURGE_HASH=
+      ;;
+    2)
+      [ "$(wc -l < "$manifest" | tr -d ' ')" -eq 10 ] \
+        || die "format 2 release manifest must have exactly ten fields"
+      CACHE_PURGE_HASH=$(manifest_value cache_purge_manifest_sha256 "$manifest")
+      valid_hash "$CACHE_PURGE_HASH"
+      ;;
+    *) die "unsupported manifest format" ;;
+  esac
   MANIFEST_RELEASE=$(manifest_value release_id "$manifest")
   APP_COMMIT=$(manifest_value application_commit "$manifest")
   STATIC_COMMIT=$(manifest_value static_assets_commit "$manifest")
@@ -70,6 +84,122 @@ validate_manifest() {
   valid_hash "$AMD64_HASH"; valid_hash "$ARM64_HASH"; valid_hash "$MEDIA_HASH"
   [ "$MANIFEST_RELEASE" = "$(printf '%.12s-%s' "$APP_COMMIT" "$SITE_RELEASE")" ] \
     || die "release id does not match provenance"
+}
+
+validate_cache_purge_manifest() {
+  cache_manifest=$1
+  [ -f "$cache_manifest" ] && [ ! -L "$cache_manifest" ] \
+    || die "cache purge manifest is not a regular file"
+  [ "$(sed -n '1p' "$cache_manifest")" = format=1 ] \
+    || die "unsupported cache purge manifest format"
+  [ "$(wc -l < "$cache_manifest" | tr -d ' ')" -ge 1 ] \
+    || die "cache purge manifest is empty"
+  previous_path=
+  sed -n '2,$p' "$cache_manifest" | while IFS= read -r line; do
+    printf '%s\n' "$line" | grep -Eq '^[0-9a-f]{64}  /[A-Za-z0-9._~%/-]*$' \
+      || die "malformed cache purge manifest entry"
+    stable_path=${line#*  }
+    case "$stable_path" in
+      *'//'*) die "unsafe cache purge path" ;;
+      *'/./'*|*'/../'*|*/.|*/..) die "unsafe cache purge path" ;;
+    esac
+    if [ -n "$previous_path" ]; then
+      [ "$(printf '%s\n%s\n' "$previous_path" "$stable_path" | LC_ALL=C sort -u | sed -n '2p')" = "$stable_path" ] \
+        || die "cache purge manifest paths must be sorted and unique"
+    fi
+    previous_path=$stable_path
+  done
+}
+
+valid_cache_purge_path() {
+  printf '%s\n' "$1" | grep -Eq '^/[A-Za-z0-9._~%/-]*$' \
+    || die "unsafe cache purge path"
+  case "$1" in
+    *'//'*) die "unsafe cache purge path" ;;
+    *'/./'*|*'/../'*|*/.|*/..) die "unsafe cache purge path" ;;
+  esac
+}
+
+effective_cache_entries() {
+  code_directory=$1
+  output=$2
+  cache_manifest="$code_directory/CACHE-PURGE-MANIFEST"
+  if [ -n "$code_directory" ] && [ -f "$cache_manifest" ]; then
+    validate_cache_purge_manifest "$cache_manifest"
+    sed -n '2,$p' "$cache_manifest" > "$output"
+    return
+  fi
+  if [ -n "$code_directory" ] && [ -f "$code_directory/RELEASE-MANIFEST" ]; then
+    legacy_hash=$(sha256sum "$code_directory/RELEASE-MANIFEST" | awk '{print $1}')
+  else
+    legacy_hash=0000000000000000000000000000000000000000000000000000000000000000
+  fi
+  printf '%s  /\n' "$legacy_hash" > "$output"
+}
+
+cache_purge_plan() {
+  old_code=$1
+  new_code=$2
+  old_entries=$(mktemp /run/galata-old-cache-entries.XXXXXX)
+  new_entries=$(mktemp /run/galata-new-cache-entries.XXXXXX)
+  effective_cache_entries "$old_code" "$old_entries"
+  effective_cache_entries "$new_code" "$new_entries"
+  awk '
+    NR == FNR { old[$2] = $1; paths[$2] = 1; next }
+    { new[$2] = $1; paths[$2] = 1 }
+    END {
+      for (path in paths) {
+        if (!(path in old) || !(path in new) || old[path] != new[path]) print path
+      }
+    }
+  ' "$old_entries" "$new_entries" | LC_ALL=C sort
+  rm -f "$old_entries" "$new_entries"
+}
+
+validate_pending_cache_purge() {
+  pending=$1
+  [ -f "$pending" ] && [ ! -L "$pending" ] \
+    || die "pending cache purge plan is not a regular file"
+  [ "$(sed -n '1p' "$pending")" = format=1 ] \
+    || die "unsupported pending cache purge format"
+  PENDING_RELEASE=$(manifest_value release_id "$pending")
+  valid_release_id "$PENDING_RELEASE"
+  [ "$(wc -l < "$pending" | tr -d ' ')" -ge 2 ] \
+    || die "pending cache purge plan is incomplete"
+  sed -n '3,$p' "$pending" | LC_ALL=C sort -cu >/dev/null \
+    || die "pending cache purge paths must be sorted and unique"
+  sed -n '3,$p' "$pending" | while IFS= read -r stable_path; do
+    valid_cache_purge_path "$stable_path"
+  done
+}
+
+persist_cache_purge_plan() {
+  release=$1
+  new_plan=$2
+  existing_paths=$(mktemp /run/galata-pending-cache-paths.XXXXXX)
+  combined_paths=$(mktemp /run/galata-combined-cache-paths.XXXXXX)
+  : > "$existing_paths"
+  if [ -e "$CACHE_PURGE_PENDING" ]; then
+    validate_pending_cache_purge "$CACHE_PURGE_PENDING"
+    sed -n '3,$p' "$CACHE_PURGE_PENDING" > "$existing_paths"
+  fi
+  cat "$existing_paths" "$new_plan" | LC_ALL=C sort -u > "$combined_paths"
+  pending_temp=$(mktemp "$DEPLOY_ROOT/cache-purge-pending/.${SLOT}.XXXXXX")
+  {
+    printf 'format=1\n'
+    printf 'release_id=%s\n' "$release"
+    cat "$combined_paths"
+  } > "$pending_temp"
+  chmod 0644 "$pending_temp"
+  mv -f "$pending_temp" "$CACHE_PURGE_PENDING"
+  rm -f "$existing_paths" "$combined_paths"
+}
+
+emit_pending_cache_purge_plan() {
+  validate_pending_cache_purge "$CACHE_PURGE_PENDING"
+  printf '%s\n' cache_purge_plan_format=1
+  printf 'cache_purge_release=%s\n' "$PENDING_RELEASE"
+  sed -n '3,$p' "$CACHE_PURGE_PENDING" | sed 's/^/cache_purge_path=/'
 }
 
 validate_media_inventory() {
@@ -247,14 +377,33 @@ activate_pair() {
   candidate_check "$code_dir/galata-server" "$expected"
   old_code=$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)
   old_media=$(readlink -f "$MEDIA_LINK" 2>/dev/null || true)
+  purge_plan=$(mktemp /run/galata-cache-purge-plan.XXXXXX)
+  cache_purge_plan "$old_code" "$code_dir" > "$purge_plan"
+  persist_cache_purge_plan "$release" "$purge_plan"
   atomic_link "$code_dir" "$CURRENT_LINK"
   atomic_link "$media_dir" "$MEDIA_LINK"
   if ! systemctl enable --now "$SERVICE" >/dev/null || ! systemctl restart "$SERVICE" \
       || ! origin_check "$expected"; then
     restore_pair "$old_code" "$old_media"
+    rm -f "$purge_plan"
     die "activation failed; previous code and media were restored"
   fi
   [ "$should_record" = yes ] && record_deployment "$SLOT" "$release" "$media"
+  emit_pending_cache_purge_plan
+  rm -f "$purge_plan"
+}
+
+ack_cache_purge() {
+  SLOT=$1; slot_values "$SLOT"
+  release=$2; valid_release_id "$release"
+  validate_pending_cache_purge "$CACHE_PURGE_PENDING"
+  [ "$PENDING_RELEASE" = "$release" ] \
+    || die "cache purge acknowledgement does not match pending release"
+  active_release=$(basename "$(readlink -f "$CURRENT_LINK")")
+  [ "$active_release" = "$release" ] \
+    || die "cache purge acknowledgement does not match active release"
+  rm -f "$CACHE_PURGE_PENDING"
+  note "$SLOT cache purge acknowledged for release $release"
 }
 
 configure() {
@@ -296,7 +445,7 @@ configure() {
   install -d -m 0755 -o root -g root "$CODE_RELEASES" "$MEDIA_RELEASES" /var/www/galata-media
   install -d -m 0755 -o root -g root "$DEPLOY_ROOT"
   install -d -m 0750 -o galata-deploy -g galata-deploy "$DEPLOY_ROOT/incoming" "$DEPLOY_ROOT/media-cache"
-  install -d -m 0755 -o root -g root "$DEPLOY_ROOT/history"
+  install -d -m 0755 -o root -g root "$DEPLOY_ROOT/history" "$DEPLOY_ROOT/cache-purge-pending"
   install -d -m 0700 -o root -g root "$PROCESS_ROOT"
   install -d -m 0750 -o root -g www-data /var/www/galatadergisi.org /var/www/dev.galatadergisi.org
   install -d -m 0755 -o root -g root /etc/nginx/sites-available \
@@ -341,27 +490,34 @@ install_release() {
     die "staged release contains a symlink or special file"
   fi
   incoming_entries=$(find "$incoming" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')
-  [ "$incoming_entries" -eq 4 ] || die "staged release contains unexpected top-level content"
-  for required in RELEASE-MANIFEST MEDIA-SHA256SUMS galata-server media; do
+  [ "$incoming_entries" -eq 5 ] || die "staged release contains unexpected top-level content"
+  for required in RELEASE-MANIFEST MEDIA-SHA256SUMS CACHE-PURGE-MANIFEST galata-server media; do
     [ -e "$incoming/$required" ] || die "staged release lacks $required"
   done
   find "$incoming" -type d -exec chown root:root {} + -exec chmod 0700 {} +
   find "$incoming" -type f -exec chown root:root {} + -exec chmod 0600 {} +
   validate_manifest "$incoming/RELEASE-MANIFEST"
+  [ "$MANIFEST_FORMAT" = 2 ] || die "new deployments require release manifest format 2"
   [ "$MANIFEST_RELEASE" = "$release" ] || die "staging directory and manifest disagree"
   architecture=$(dpkg --print-architecture)
   case "$architecture" in amd64) expected_hash=$AMD64_HASH ;; arm64) expected_hash=$ARM64_HASH ;; *) die "unsupported VPS architecture" ;; esac
   [ -f "$incoming/galata-server" ] && [ ! -L "$incoming/galata-server" ] || die "candidate binary is unsafe"
   [ "$(sha256sum "$incoming/galata-server" | awk '{print $1}')" = "$expected_hash" ] || die "binary checksum mismatch"
+  [ "$(sha256sum "$incoming/CACHE-PURGE-MANIFEST" | awk '{print $1}')" = "$CACHE_PURGE_HASH" ] \
+    || die "cache purge manifest checksum mismatch"
+  validate_cache_purge_manifest "$incoming/CACHE-PURGE-MANIFEST"
   validate_media_inventory "$incoming/MEDIA-SHA256SUMS" "$incoming/media"
   code_dir="$CODE_RELEASES/$release"
   if [ ! -d "$code_dir" ]; then
     install -d -m 0755 -o root -g root "$code_dir"
     install -m 0755 -o root -g root "$incoming/galata-server" "$code_dir/galata-server"
-    install -m 0644 -o root -g root "$incoming/RELEASE-MANIFEST" "$incoming/MEDIA-SHA256SUMS" "$code_dir/"
+    install -m 0644 -o root -g root "$incoming/RELEASE-MANIFEST" \
+      "$incoming/MEDIA-SHA256SUMS" "$incoming/CACHE-PURGE-MANIFEST" "$code_dir/"
   fi
   [ "$(sha256sum "$code_dir/galata-server" | awk '{print $1}')" = "$expected_hash" ] \
     || die "installed binary checksum mismatch"
+  [ "$(sha256sum "$code_dir/CACHE-PURGE-MANIFEST" | awk '{print $1}')" = "$CACHE_PURGE_HASH" ] \
+    || die "installed cache purge manifest checksum mismatch"
   media_dir="$MEDIA_RELEASES/$STATIC_COMMIT"
   if [ ! -d "$media_dir" ]; then
     temporary="$MEDIA_RELEASES/.new-$STATIC_COMMIT-$$"
@@ -430,6 +586,11 @@ verify() {
   case "$architecture" in amd64) expected_hash=$AMD64_HASH ;; arm64) expected_hash=$ARM64_HASH ;; *) die "unsupported VPS architecture" ;; esac
   [ "$(sha256sum "$CODE_RELEASES/$release/galata-server" | awk '{print $1}')" = "$expected_hash" ] \
     || die "$SLOT installed binary checksum mismatch"
+  if [ "$MANIFEST_FORMAT" = 2 ]; then
+    [ "$(sha256sum "$CODE_RELEASES/$release/CACHE-PURGE-MANIFEST" | awk '{print $1}')" = "$CACHE_PURGE_HASH" ] \
+      || die "$SLOT installed cache purge manifest checksum mismatch"
+    validate_cache_purge_manifest "$CODE_RELEASES/$release/CACHE-PURGE-MANIFEST"
+  fi
   active_media=$(readlink -f "$MEDIA_LINK")
   validate_published_media_permissions "$active_media"
   validate_media_inventory "$CODE_RELEASES/$release/MEDIA-SHA256SUMS" "$active_media"
@@ -467,7 +628,8 @@ verify() {
 
 status() {
   cache_bytes=$(du -sb "$DEPLOY_ROOT/media-cache" 2>/dev/null | awk '{print $1}' || printf 0)
-  printf 'architecture=%s\ncache_bytes=%s\n' "$(dpkg --print-architecture)" "$cache_bytes"
+  printf 'architecture=%s\ncache_bytes=%s\ncache_plan_format=2\n' \
+    "$(dpkg --print-architecture)" "$cache_bytes"
 }
 
 require_root
@@ -477,11 +639,16 @@ shift
 case "$command" in
   configure) [ "$#" -eq 1 ] || die "configure requires bundle path"; configure "$1" ;;
   status) [ "$#" -eq 0 ] || die "status takes no arguments"; status ;;
-  activate|rollback)
+  activate|rollback|ack-cache-purge)
     [ "${SUDO_USER:-}" = galata-deploy ] || [ "${SUDO_USER:-root}" != galata-deploy ]
     exec 9>"$LOCK_FILE"; flock -n 9 || die "another deployment is running"
-    if [ "$command" = activate ]; then [ "$#" -eq 2 ] || die "activate requires slot and release"; activate "$1" "$2"
-    else [ "$#" -ge 1 ] && [ "$#" -le 2 ] || die "rollback requires slot and optional release"; rollback "$@"; fi
+    if [ "$command" = activate ]; then
+      [ "$#" -eq 2 ] || die "activate requires slot and release"; activate "$1" "$2"
+    elif [ "$command" = rollback ]; then
+      [ "$#" -ge 1 ] && [ "$#" -le 2 ] || die "rollback requires slot and optional release"; rollback "$@"
+    else
+      [ "$#" -eq 2 ] || die "ack-cache-purge requires slot and release"; ack_cache_purge "$1" "$2"
+    fi
     ;;
   verify) [ "$#" -eq 1 ] || die "verify requires slot"; verify "$1" ;;
   *) die "unsupported command: $command" ;;
