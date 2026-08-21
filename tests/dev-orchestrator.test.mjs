@@ -1,10 +1,14 @@
 import assert from 'assert/strict';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 import test from 'node:test';
 import { fileURLToPath } from 'url';
 
-import { parseDevelopmentOptions } from '../scripts/dev.mjs';
+import {
+  parseDevelopmentOptions,
+  waitForFrontendReady,
+} from '../scripts/dev.mjs';
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, '..');
@@ -102,8 +106,30 @@ test('development generates and watches the carousel sheet', () => {
   assert.match(viteSource, /this\.addWatchFile\(source\)/);
   assert.match(viteSource, /listen\(port, '127\.0\.0\.1', callback\)/);
   assert.match(viteSource, /port: 35729/);
+  assert.match(viteSource, /process\.send\(\{ type: frontendReadyMessage \}\)/);
+  assert.match(
+    developmentSource,
+    /await waitForFrontendReady\(frontendBuildChild\);[\s\S]+log\(`local contributions persist[\s\S]+log\(`ready at/,
+  );
   assert.match(
     gitignoreSource,
     /^\/client\/images\/carousel-thumbnail-placeholders\.webp$/m,
   );
+});
+
+test('development waits for the watch build readiness signal', async () => {
+  const child = new EventEmitter();
+  const ready = waitForFrontendReady(child);
+  let resolved = false;
+  ready.then(() => {
+    resolved = true;
+  });
+
+  child.emit('message', { type: 'unrelated' });
+  await Promise.resolve();
+  assert.equal(resolved, false);
+
+  child.emit('message', { type: 'galata-frontend-ready' });
+  await ready;
+  assert.equal(resolved, true);
 });

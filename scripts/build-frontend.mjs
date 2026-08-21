@@ -13,6 +13,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDirectory, '..');
 const development = process.argv.includes('--development') || process.argv.includes('--watch');
 const watch = process.argv.includes('--watch');
+const frontendReadyMessage = 'galata-frontend-ready';
 const svelteConfig = path.join(projectRoot, 'svelte.config.mjs');
 
 const liveReloadBanner = [
@@ -232,6 +233,7 @@ async function watchBuilds() {
   copyAssets();
   const liveReloadServer = await startLiveReload();
   let finalizeTimer = null;
+  let initialFinalization = true;
   const completedBuilds = new Set();
 
   function scheduleFinalization(index) {
@@ -243,6 +245,13 @@ async function watchBuilds() {
       const result = finalizeServiceWorker();
       process.stdout.write(
         `Finalized service worker ${result.release} (${result.precacheCount} shell assets).\n`,
+        () => {
+          if (!initialFinalization) return;
+          initialFinalization = false;
+          if (typeof process.send === 'function' && process.connected) {
+            process.send({ type: frontendReadyMessage });
+          }
+        },
       );
     }, 100);
   }

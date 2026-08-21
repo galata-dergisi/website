@@ -42,6 +42,7 @@ const carouselSheetWatchPaths = [
   ),
   carouselSheetGenerator,
 ];
+const frontendReadyMessage = 'galata-frontend-ready';
 const childEnvironment = { ...process.env };
 const commandChildren = new Set();
 let shutdownRequested = false;
@@ -298,6 +299,34 @@ function startServer(candidate, options) {
   });
 }
 
+export function waitForFrontendReady(child) {
+  return new Promise((resolve, reject) => {
+    function cleanup() {
+      child.off('message', onMessage);
+      child.off('error', onError);
+      child.off('exit', onExit);
+    }
+    function onMessage(message) {
+      if (message?.type !== frontendReadyMessage) return;
+      cleanup();
+      resolve();
+    }
+    function onError(error) {
+      cleanup();
+      reject(error);
+    }
+    function onExit(code, signal) {
+      cleanup();
+      reject(new Error(
+        `Vite watcher stopped before becoming ready (${signal || code})`,
+      ));
+    }
+    child.on('message', onMessage);
+    child.once('error', onError);
+    child.once('exit', onExit);
+  });
+}
+
 function readDevelopmentStatus(port) {
   return new Promise((resolve, reject) => {
     const request = http.get({
@@ -474,8 +503,6 @@ async function main() {
     siteRoot: initialSiteRoot,
     binary: initialBinary,
   });
-  log(`ready at ${developmentUrl(options.port)}`);
-  log(`local contributions persist in ${options.contributionsDir}`);
 
   const pending = new Set();
   let rebuildTimer = null;
@@ -618,7 +645,7 @@ async function main() {
   ], {
     cwd: repoRoot,
     env: childEnvironment,
-    stdio: 'inherit',
+    stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
   });
   frontendBuildChild.once('error', (error) => {
     process.stderr.write(`[galata-dev] Vite watcher failed: ${error.message}\n`);
@@ -633,6 +660,10 @@ async function main() {
     }
   });
 
+  await waitForFrontendReady(frontendBuildChild);
+  if (stopping) return;
+  log(`local contributions persist in ${options.contributionsDir}`);
+  log(`ready at ${developmentUrl(options.port)}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
