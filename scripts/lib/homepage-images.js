@@ -79,7 +79,7 @@ function homepageArtworkSources(manifest) {
   };
   return {
     firstShelf: source('firstShelf', '/images/first-shelf.png'),
-    headerLogo: source('headerLogo', '/images/header-logo.jpg'),
+    headerLogo: source('headerLogo', '/images/header-logo.svg'),
     wallBookshelf: source('wallBookshelf', '/images/wall-bookshelf.png'),
   };
 }

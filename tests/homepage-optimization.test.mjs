@@ -63,14 +63,15 @@ test('homepage AVIFs are deterministic, correctly sized, and immutable', async (
   }
 });
 
-test('homepage markup uses AVIF pictures and the unified application bundle', () => {
+test('homepage markup uses optimized image sources and the unified application bundle', () => {
   const shell = readJson('build/shell-assets.json');
   const home = readRoute('/').content.toString('utf8');
   const directReader = readRoute('/dergiler/sayi47').content.toString('utf8');
   const magazineList = JSON.parse(readRoute('/magazines').content.toString('utf8'));
 
-  assert.equal((home.match(/<picture[^>]*>/g) || []).length, 5);
-  assert.equal((home.match(/<source[^>]+type="image\/avif"/g) || []).length, 5);
+  assert.equal((home.match(/<picture[^>]*>/g) || []).length, 4);
+  assert.equal((home.match(/<source[^>]+type="image\/avif"/g) || []).length, 4);
+  assert.match(home, /<img src="\/images\/header-logo\.svg\?v=[a-f0-9]{16}"/);
   assert.equal((home.match(/loading="lazy"/g) || []).length, 3);
   assert.match(
     home,

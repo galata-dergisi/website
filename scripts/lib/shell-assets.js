@@ -29,6 +29,7 @@ const shellAssetEntries = [
   ['/images/bant.jpg', 'public/images/bant.jpg'],
   ['/images/first-shelf.png', 'public/images/first-shelf.png'],
   ['/images/header-logo.jpg', 'public/images/header-logo.jpg'],
+  ['/images/header-logo.svg', 'public/images/header-logo.svg'],
   ['/images/wall-bookshelf.png', 'public/images/wall-bookshelf.png'],
 ];
 
@@ -214,6 +215,7 @@ function createShellAssetManifest(projectRoot) {
       resolve('/global.css'),
       resolve('/images/favicon.png'),
       resolve('/images/carousel-thumbnail-placeholders.webp'),
+      resolve('/images/header-logo.svg'),
       ...Object.values(homepageImages.artwork).map((asset) => resolve(asset.url)),
     ],
     reader: readerLeafPaths.map(resolve),

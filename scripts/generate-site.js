@@ -43,6 +43,7 @@ const CONTENT_TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml; charset=utf-8',
   '.ttf': 'font/ttf',
   '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
@@ -62,6 +63,7 @@ function extensionFor(contentType) {
     'application/json': '.json',
     'application/xml': '.xml',
     'application/atom+xml': '.xml',
+    'image/svg+xml': '.svg',
     'text/css': '.css',
     'text/html': '.html',
     'text/javascript': '.js',
@@ -70,7 +72,7 @@ function extensionFor(contentType) {
 }
 
 function isCompressible(contentType) {
-  return /^(?:application\/(?:json|xml|atom\+xml)|text\/)/.test(contentType);
+  return /^(?:application\/(?:json|xml|atom\+xml)|image\/svg\+xml|text\/)/.test(contentType);
 }
 
 function stableJson(value) {
@@ -424,6 +426,7 @@ function main(arguments_ = process.argv.slice(2)) {
     'images/favicon.png',
     'images/first-shelf.png',
     'images/header-logo.jpg',
+    'images/header-logo.svg',
     'images/wall-bookshelf.png',
   ];
   smallAssets.forEach((asset) => {

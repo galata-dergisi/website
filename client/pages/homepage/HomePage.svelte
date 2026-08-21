@@ -417,19 +417,14 @@
       class="logo"
       out:fly={{ duration: 1000, y: -220 }}
       in:fly={{ duration: 1000, y: -220, delay: 200 }}>
-      <picture>
-        {#if initialArtwork.headerLogo?.avif}
-          <source srcset={initialArtwork.headerLogo.avif} type="image/avif" />
-        {/if}
-        <img
-          src={initialArtwork.headerLogo?.fallback || '/images/header-logo.jpg'}
-          alt="Galata Dergisi"
-          width="567"
-          height="200"
-          decoding="async"
-          loading="eager"
-          fetchpriority="high" />
-      </picture>
+      <img
+        src={initialArtwork.headerLogo?.fallback || '/images/header-logo.svg'}
+        alt="Galata Dergisi"
+        width="567"
+        height="200"
+        decoding="async"
+        loading="eager"
+        fetchpriority="high" />
     </div>
   {/if}
 

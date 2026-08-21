@@ -409,6 +409,7 @@ try {
     for (const logicalPath of [
       '/images/favicon.png',
       '/images/carousel-thumbnail-placeholders.webp',
+      '/images/header-logo.svg',
       '/global.css',
       '/bundle.css',
       '/bundle.js',

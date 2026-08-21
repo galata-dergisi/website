@@ -55,7 +55,11 @@ criticalTransfers.set(homepageJavaScript.url, homepageJavaScriptGzip);
 homepageStylesheets.forEach((asset) => {
   criticalTransfers.set(asset.url, gzipSize(outputContent(asset)));
 });
-for (const logicalPath of ['/global.css', '/service-worker.js']) {
+for (const logicalPath of [
+  '/global.css',
+  '/images/header-logo.svg',
+  '/service-worker.js',
+]) {
   criticalTransfers.set(
     logicalPath,
     gzipSize(fs.readFileSync(path.join(projectRoot, `public${logicalPath}`))),

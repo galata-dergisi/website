@@ -30,7 +30,6 @@ const COVER_SIZES = Object.freeze([
 ]);
 const ARTWORK = Object.freeze({
   firstShelf: 'first-shelf.png',
-  headerLogo: 'header-logo.jpg',
   wallBookshelf: 'wall-bookshelf.png',
 });
 
