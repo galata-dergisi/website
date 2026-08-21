@@ -54,18 +54,6 @@ assert_media_publication() {
     || fail "nginx user cannot read published audio"
 }
 
-assert_addresses() {
-  file=$1
-  candidate=$2
-  live=$3
-  expected=$(printf '%s\n%s\n' "$candidate" "$live")
-  actual=$(cat "$file")
-  [ "$actual" = "$expected" ] || {
-    printf 'expected bind sequence:\n%s\nactual bind sequence:\n%s\n' "$expected" "$actual" >&2
-    fail "candidate and live service did not use their isolated ports"
-  }
-}
-
 id galata >/dev/null 2>&1 \
   || useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin galata
 id galata-dev >/dev/null 2>&1 \
@@ -85,12 +73,9 @@ install -d -m 0755 \
 install -d -m 0750 -o galata-deploy -g galata-deploy \
   /var/lib/galata-deploy/incoming \
   /var/lib/galata-deploy/media-cache
-install -d -m 0700 -o galata -g galata /var/lib/galata-contributions
-install -d -m 0700 -o galata-dev -g galata-dev /var/lib/galata-dev-contributions
-
-write_runtime_environment production docker-deployment-test-placeholder \
+write_runtime_environment production \
   > /etc/galata/production.env
-write_runtime_environment dev docker-deployment-test-placeholder \
+write_runtime_environment dev \
   > /etc/galata/dev.env
 chmod 0600 /etc/galata/production.env /etc/galata/dev.env
 systemctl daemon-reload
@@ -105,15 +90,6 @@ SUDO_USER=galata-deploy /usr/local/sbin/galata-deploy-helper \
 
 assert_media_publication /var/www/galatadergisi.org/public
 assert_media_publication /var/www/dev.galatadergisi.org/public
-
-assert_addresses \
-  /var/lib/galata-contributions/test-listen-addresses \
-  127.0.0.1:39000 \
-  127.0.0.1:3000
-assert_addresses \
-  /var/lib/galata-dev-contributions/test-listen-addresses \
-  127.0.0.1:39001 \
-  127.0.0.1:3001
 
 curl --fail --silent --show-error http://127.0.0.1:3000/healthz \
   | grep -Fq '"release":"bbbbbbbbbbbbbbbb"' \

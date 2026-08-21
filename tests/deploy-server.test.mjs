@@ -318,8 +318,8 @@ test('tracked helper encodes slot isolation, candidate checks, rollback, and sud
   assert.match(helper, /validate_published_media_permissions "\$active_media"/);
   assert.match(deploy, /ControlMaster=auto/);
   assert.match(deploy, /\. "\$SCRIPT_DIR\/runtime-environment\.sh"/);
-  assert.match(deploy, /write_runtime_environment production "\$secret"/);
-  assert.match(deploy, /write_runtime_environment dev "\$secret"/);
+  assert.match(deploy, /write_runtime_environment production/);
+  assert.match(deploy, /write_runtime_environment dev/);
   assert.match(runtimeEnvironment, /LISTEN_ADDR=127\.0\.0\.1:3000/);
   assert.match(runtimeEnvironment, /LISTEN_ADDR=127\.0\.0\.1:3001/);
   assert.match(
@@ -365,7 +365,7 @@ test('deployment builds and tests its own artifact while preserving provenance',
   assert.match(workflow, /group: galata-vps-deployment/);
   assert.doesNotMatch(
     workflow,
-    /secrets\.(?:TURNSTILE|CLOUDFLARE|BASIC_AUTH)/,
+    /secrets\.(?:CLOUDFLARE|BASIC_AUTH)/,
   );
   assert.match(verificationWorkflow, /name: Verify site and server/);
   assert.match(verificationWorkflow, /token: \$\{\{ secrets\.STATIC_ASSETS_TOKEN \}\}/);
@@ -375,7 +375,7 @@ test('deployment builds and tests its own artifact while preserving provenance',
   assert.doesNotMatch(verificationWorkflow, /release\/RELEASE-MANIFEST/);
 });
 
-test('nginx keeps tunnel-only slots, Access boundary, limits, and media roots independent', () => {
+test('nginx keeps tunnel-only slots, Access boundary, and media roots independent', () => {
   const shared = fs.readFileSync(
     path.join(repositoryRoot, 'ops/nginx/galata-shared.conf'), 'utf8',
   );
@@ -387,9 +387,6 @@ test('nginx keeps tunnel-only slots, Access boundary, limits, and media roots in
   );
   assert.match(shared, /server 127\.0\.0\.1:3000/);
   assert.match(shared, /server 127\.0\.0\.1:3001/);
-  assert.match(shared, /zone=galata_contribution_rate/);
-  assert.match(shared, /zone=galata_dev_contribution_rate/);
-  assert.match(shared, /map \$http_cf_connecting_ip \$galata_client_address/);
   assert.doesNotMatch(shared, /galata_from_cloudflare|173\.245\.48\.0\/20/);
   assert.match(production, /listen 127\.0\.0\.1:8080;/);
   assert.match(dev, /listen 127\.0\.0\.1:8080;/);
@@ -401,6 +398,10 @@ test('nginx keeps tunnel-only slots, Access boundary, limits, and media roots in
   assert.match(dev, /proxy_set_header X-Forwarded-Proto https/);
   assert.match(production, /location = \/healthz[\s\S]*no-store/);
   assert.match(dev, /location = \/healthz[\s\S]*no-store/);
+  assert.doesNotMatch(
+    `${shared}\n${production}\n${dev}`,
+    /galata_(?:dev_)?contribution|client_max_body_size 52m|proxy_request_buffering off/,
+  );
   assert.doesNotMatch(`${shared}\n${production}\n${dev}`, /listen\s+(80|443|3000|3001)\b/);
   const helper = fs.readFileSync(helperScript, 'utf8');
   assert.match(helper, /--header "Host: \$HOSTNAME" "http:\/\/127\.0\.0\.1:8080\/healthz"/);

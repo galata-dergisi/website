@@ -53,7 +53,6 @@ const carouselPlaceholderModule = import(
 );
 const audioPlayerStateModule = import('../client/lib/audio-player-state.mjs');
 const audioPlayerControllerModule = import('../client/lib/audio-player-controller.mjs');
-const contributionFilePolicyModule = import('../client/lib/contribution-file-policy.mjs');
 
 const { mediaContributionPath, workPath } = SeoRenderer;
 
@@ -199,17 +198,16 @@ test('adds isolated development rendering without changing production templates'
     <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/service-worker.js'); }</script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=test"></script>
     <script>window.dataLayer = []; function gtag(){} gtag('config', 'test');</script>
-    <script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   </head><body></body></html>`;
   const rendered = renderDevelopmentDocument(source, 'generation-test');
   assert.match(rendered, /name="robots" content="noindex, nofollow"/);
-  assert.match(rendered, /window\.galataDevelopment/);
+  assert.match(rendered, /galataDevelopmentRuntime/);
   assert.match(rendered, /generation-test/);
   assert.match(rendered, /\/__dev\/status/);
   assert.match(rendered, /status\.server !== observedServer/);
   assert.doesNotMatch(
     rendered,
-    /googletagmanager|turnstile\/v0\/api|serviceWorker\.register\(/,
+    /googletagmanager|serviceWorker\.register\(/,
   );
   assert.match(source, /googletagmanager/);
 });
@@ -2128,180 +2126,6 @@ test('maps magazine covers onto the low-resolution placeholder sprite', async ()
   assert(asset.length < 10 * 1024, 'placeholder sprite must stay below 10 KiB');
 });
 
-test('keeps the contribution form out of search results', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/katkida-bulunun.html'),
-    'utf8',
-  );
-  assert.match(source, /<meta name="robots" content="noindex" \/>/);
-});
-
-test('configures Turnstile after the contribution bundle', () => {
-  const documentSource = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/katkida-bulunun.html'),
-    'utf8',
-  );
-  const componentSource = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-  const bundleIndex = documentSource.indexOf('/katkida-bulunun/bundle.js');
-  const turnstileIndex = documentSource.indexOf(
-    'https://challenges.cloudflare.com/turnstile/v0/api.js',
-  );
-
-  assert(bundleIndex !== -1 && turnstileIndex > bundleIndex);
-  assert.match(documentSource, /<script defer src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js"><\/script>/);
-  assert.match(componentSource, /class="cf-turnstile"/);
-  assert.match(componentSource, /data-sitekey="0x4AAAAAAEFQTSL_Bceyu_qG"/);
-  assert.match(componentSource, /data-language="tr"/);
-  assert.match(componentSource, /data-action="contribution"/);
-  assert.match(componentSource, /matchMedia\('\(prefers-color-scheme: dark\)'\)\.matches/);
-  assert.match(componentSource, /formData\.get\('cf-turnstile-response'\)/);
-  assert.match(componentSource, /window\.turnstile\.reset\(\)/);
-  assert.match(componentSource, /disabled=\{submitting\}/);
-
-  const honeypot = componentSource.match(/<div hidden>[\s\S]*?<\/div>/);
-  assert(honeypot, 'hidden contribution honeypot is missing');
-  assert.match(honeypot[0], /name="contactWebsite"/);
-  assert.match(honeypot[0], /autocomplete="off"/);
-  assert.doesNotMatch(honeypot[0], /\bdisabled\b/);
-  assert.doesNotMatch(honeypot[0], /\brequired\b/);
-});
-
-test('submits the contribution form through native form semantics', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /async function onSubmit\(event\)\s*\{\s*event\.preventDefault\(\)/);
-  assert.match(source, /<form[^>]*onsubmit=\{onSubmit\}/);
-  assert.match(source, /<button[\s\S]*?type="submit"[\s\S]*?>Gönder<\/button>/);
-  assert.doesNotMatch(source, /onButtonClick|preventFormSubmission|<input type="submit"/);
-});
-
-test('synchronizes contribution form state after a successful reset', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /import \{ onMount, tick \} from 'svelte'/);
-  assert.match(
-    source,
-    /async function resetForm\(\)[\s\S]*?form\.reset\(\);[\s\S]*?assetType = '';[\s\S]*?await tick\(\);/,
-  );
-  assert.match(source, /await tick\(\);[\s\S]*initializeAssetTypeSelect\(\)/);
-  assert.match(source, /M\.updateTextFields\(\)/);
-  assert.match(source, /await resetForm\(\)/);
-});
-
-test('keeps accepted contribution files using their declared extension', async () => {
-  const {
-    acceptedFileTypes,
-    fileMatchesAssetType,
-  } = await contributionFilePolicyModule;
-
-  assert.strictEqual(fileMatchesAssetType({ name: 'work.DOCX', type: '' }, 'siir'), true);
-  assert.strictEqual(
-    fileMatchesAssetType({ name: 'work.odt', type: 'application/octet-stream' }, 'oyku'),
-    true,
-  );
-  assert.strictEqual(fileMatchesAssetType({ name: 'recording.ogg', type: '' }, 'ses'), true);
-  assert.strictEqual(fileMatchesAssetType({ name: 'photo.jpeg', type: '' }, 'resim'), true);
-  assert.strictEqual(fileMatchesAssetType({ name: 'photo.jpeg', type: 'image/jpeg' }, 'siir'), false);
-  assert.strictEqual(fileMatchesAssetType({ name: 'work', type: 'application/pdf' }, 'siir'), false);
-  assert.strictEqual(fileMatchesAssetType({ name: 'work.pdf', type: 'application/pdf' }, 'video'), false);
-  assert.match(acceptedFileTypes('siir'), /\.docx/);
-  assert.match(acceptedFileTypes('resim'), /image\/\*/);
-  assert.strictEqual(acceptedFileTypes('video'), '');
-});
-
-test('allows switching from video back to a file-based contribution', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /function ensureFileMatchesAssetType\(\)\s*\{\s*if \(!fileInput\) return/);
-  assert.match(source, /ensureFileMatchesAssetType\(\);[\s\S]*await tick\(\);[\s\S]*syncAssetTypeOptions\(instance\)/);
-});
-
-test('gives the enhanced asset-type picker complete accessible semantics', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /<label id="assetTypeLabel" for="assetType">Eser Türü<\/label>/);
-  assert.match(source, /trigger\.setAttribute\('role', 'combobox'\)/);
-  assert.match(source, /trigger\.setAttribute\('aria-labelledby', 'assetTypeLabel'\)/);
-  assert.match(source, /trigger\.setAttribute\('aria-controls', trigger\.dataset\.target\)/);
-  assert.match(source, /trigger\.setAttribute\('aria-required', 'true'\)/);
-  assert.match(source, /menu\.setAttribute\('role', 'listbox'\)/);
-  assert.match(source, /option\.setAttribute\('role', 'option'\)/);
-  assert.match(source, /onOpenStart:[\s\S]*aria-expanded'[\s\S]*'true'/);
-  assert.match(source, /onCloseEnd:[\s\S]*aria-expanded'[\s\S]*'false'/);
-  assert.match(source, /M\.AutoInit\(\);[\s\S]*initializeAssetTypeSelect\(\)/);
-});
-
-test('exposes the asset-type picker validation state to assistive technology', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /setCustomValidity\('Lütfen Eser Türü seçimi yapınız\.'\)[\s\S]*setAttribute\('aria-invalid', 'true'\)/);
-  assert.match(source, /setCustomValidity\(''\)[\s\S]*removeAttribute\('aria-invalid'\)/);
-});
-
-test('shows and localizes keyboard focus on the contribution file picker', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '../client/pages/contribute/Contribute.svelte'),
-    'utf8',
-  );
-
-  assert.match(source, /type="file"[\s\S]*aria-label="Dosya seç"/);
-  assert.match(source, /\.file-field \.btn:has\(input\[type='file'\]:focus-visible\)/);
-  assert.match(source, /outline: 3px solid #004d40/);
-  assert.match(source, /@media \(forced-colors: active\)/);
-});
-
-test('keeps production ZAP scans aligned with Turnstile rejection contracts', () => {
-  const composeSource = fs.readFileSync(
-    path.join(__dirname, '../ops/zap/compose.yaml'),
-    'utf8',
-  );
-  const contractSource = fs.readFileSync(
-    path.join(__dirname, '../ops/zap/check-turnstile-contract.sh'),
-    'utf8',
-  );
-  const baselineSource = fs.readFileSync(
-    path.join(__dirname, '../ops/zap/run-baseline.sh'),
-    'utf8',
-  );
-  const activeSource = fs.readFileSync(
-    path.join(__dirname, '../ops/zap/run-active.sh'),
-    'utf8',
-  );
-
-  assert.match(composeSource, /TURNSTILE_SECRET_KEY: zap-scan-placeholder/);
-  assert.match(
-    composeSource,
-    /TURNSTILE_ALLOWED_HOSTNAMES: galatadergisi\.org,www\.galatadergisi\.org/,
-  );
-  assert.doesNotMatch(
-    composeSource,
-    new RegExp([['RE', 'CAPTCHA'].join(''), 'SECRET'].join('_')),
-  );
-  assert.match(contractSource, /cf-turnstile-response=must-not-be-verified/);
-  assert.match(contractSource, /assert_response 400 captcha_required/);
-  assert.match(contractSource, /assert_response 400 captcha_invalid/);
-  assert.match(baselineSource, /check-turnstile-contract\.sh/);
-  assert.match(activeSource, /check-turnstile-contract\.sh/);
-});
-
 test('keeps the local production preview on the production runtime boundary', () => {
   const composeSource = fs.readFileSync(
     path.join(__dirname, '../ops/local-production/compose.yaml'),
@@ -2341,10 +2165,6 @@ test('keeps the local production preview on the production runtime boundary', ()
   assert.match(composeSource, /LISTEN_ADDR: 127\.0\.0\.1:3000/);
   assert.match(
     composeSource,
-    /TURNSTILE_ALLOWED_HOSTNAMES: galatadergisi\.org,www\.galatadergisi\.org/,
-  );
-  assert.match(
-    composeSource,
     /"127\.0\.0\.1:\$\{GALATA_PREVIEW_HTTPS_PORT:-44443\}:443"/,
   );
   assert.match(composeSource, /network_mode: service:app/);
@@ -2361,7 +2181,7 @@ test('keeps the local production preview on the production runtime boundary', ()
   assert.match(smokeSource, /assert_status 304/);
   assert.match(smokeSource, /assert_status 206/);
   assert.match(smokeSource, /Content-Type: audio\/mpeg/);
-  assert.match(smokeSource, /assert_status 429/);
+  assert.match(smokeSource, /retired contribution endpoint/);
   assert.match(previewSource, /env_file="\$repo_root\/\.env\.production"/);
   assert.match(previewSource, /if \[ -f "\$env_file" \]/);
   assert.match(
@@ -2370,16 +2190,12 @@ test('keeps the local production preview on the production runtime boundary', ()
   );
   [
     'LISTEN_ADDR',
-    'CONTRIBUTIONS_DIR',
     'EXTERNAL_MEDIA_DIR',
-    'TURNSTILE_SECRET_KEY',
-    'TURNSTILE_ALLOWED_HOSTNAMES',
     'GALATA_MEDIA_ROOT',
     'GALATA_PREVIEW_HTTPS_PORT',
   ].forEach((name) => {
     assert.match(exampleSource, new RegExp(`^${name}=`, 'm'));
   });
-  assert.match(exampleSource, /^TURNSTILE_SECRET_KEY=$/m);
   assert.match(gitignoreSource, /^\.env\*$/m);
   assert.match(gitignoreSource, /^!\.env\.example$/m);
   assert.match(dockerignoreSource, /^\.env\*$/m);

@@ -3,13 +3,9 @@
 // Development-only HTML changes. Production generation never calls this
 // module's transform, keeping release documents byte-for-byte unchanged.
 
-const DEVELOPMENT_CAPTCHA_TOKEN = 'galata-development';
-
 function developmentClient(generationToken) {
   const generation = JSON.stringify(generationToken).replace(/</g, '\\u003c');
-  const captcha = JSON.stringify(DEVELOPMENT_CAPTCHA_TOKEN);
   return `<script>
-      window.galataDevelopment = Object.freeze({ captchaToken: ${captcha} });
       (function galataDevelopmentRuntime() {
         var expectedGeneration = ${generation};
         var observedServer = null;
@@ -68,10 +64,6 @@ function renderDevelopmentDocument(source, generationToken) {
     .replace(
       /<script>\s*window\.dataLayer\s*=[\s\S]*?gtag\(\s*['"]config['"][\s\S]*?<\/script>/gi,
       '',
-    )
-    .replace(
-      /<script[^>]+src=["']https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js[^"']*["'][^>]*><\/script>/gi,
-      '',
     );
   if (!/<meta\s+name=["']robots["']/i.test(html)) {
     html = html.replace(
@@ -86,7 +78,6 @@ function renderDevelopmentDocument(source, generationToken) {
 }
 
 module.exports = {
-  DEVELOPMENT_CAPTCHA_TOKEN,
   developmentClient,
   renderDevelopmentDocument,
 };

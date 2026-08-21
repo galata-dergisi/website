@@ -41,6 +41,10 @@ const retiredCaptchaProduct = ['re', 'captcha'].join('');
 const forbiddenPaths = [
   'server/',
   'client/vendor/turnjs/',
+  'client/pages/contribute/',
+  'client/lib/contribution-file-policy.mjs',
+  'internal/contributions/',
+  'ops/zap/check-turnstile-contract.sh',
   '.github/workflows/deploy-client.yml',
   'config.example.js',
 ];
@@ -77,12 +81,11 @@ if (
 });
 
 const productionServer = fs.readFileSync(productionServerPath, 'utf8');
-if (!/MaxConcurrent:\s*8,/.test(productionServer)) {
-  failures.push('production contribution concurrency cap is not eight');
-}
 const developmentServer = fs.readFileSync(developmentServerPath, 'utf8');
-if (/MaxConcurrent:/.test(developmentServer)) {
-  failures.push('development contribution concurrency must use the unlimited default');
+if (/internal\/contributions|TURNSTILE|CONTRIBUTIONS_DIR/.test(
+  `${productionServer}\n${developmentServer}`,
+)) {
+  failures.push('retired submission runtime remains in a Go server');
 }
 
 const forbiddenSource = [
@@ -152,22 +155,6 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
       pattern: /^\s*alias \/var\/www\/galatadergisi\.org\/public\/audio\/\$magazine_index\/\$audio_file;\s*$/m,
     },
     {
-      label: 'contribution request limit',
-      pattern: /^\s*client_max_body_size 52m;\s*$/m,
-    },
-    {
-      label: 'streamed contribution requests',
-      pattern: /^\s*proxy_request_buffering off;\s*$/m,
-    },
-    {
-      label: 'tunnel visitor address with local fallback',
-      pattern: new RegExp([
-        String.raw`^map \$http_cf_connecting_ip \$galata_client_address \{`,
-        String.raw`\s*\n\s*default \$http_cf_connecting_ip;`,
-        String.raw`\s*\n\s*"" \$remote_addr;\s*\n\}$`,
-      ].join(''), 'm'),
-    },
-    {
       label: 'loopback Cloudflare Tunnel origin listener',
       pattern: /^\s*listen 127\.0\.0\.1:8080;\s*$/m,
     },
@@ -176,72 +163,8 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
       pattern: /^\s*proxy_set_header X-Forwarded-Proto https;\s*$/m,
     },
     {
-      label: 'exact contribution POST limiter key',
-      pattern: new RegExp([
-        String.raw`^map "\$request_method:\$uri" \$galata_contribution_client_key \{`,
-        String.raw`\s*\n\s*default "";`,
-        String.raw`\s*\n\s*"POST:/katkida-bulunun" \$galata_client_address;\s*\n\}$`,
-      ].join(''), 'm'),
-    },
-    {
-      label: 'one-request-per-minute contribution zone',
-      pattern: /^limit_req_zone \$galata_contribution_client_key zone=galata_contribution_rate:10m rate=1r\/m;$/m,
-    },
-    {
-      label: 'contribution connection zone',
-      pattern: /^limit_conn_zone \$galata_contribution_client_key zone=galata_contribution_connections:10m;$/m,
-    },
-    {
-      label: 'balanced contribution request burst',
-      pattern: /^\s*limit_req zone=galata_contribution_rate burst=4 nodelay;\s*$/m,
-    },
-    {
-      label: 'one concurrent contribution per client',
-      pattern: /^\s*limit_conn galata_contribution_connections 1;\s*$/m,
-    },
-    {
-      label: 'request-limit 429 status',
-      pattern: /^\s*limit_req_status 429;\s*$/m,
-    },
-    {
-      label: 'connection-limit 429 status',
-      pattern: /^\s*limit_conn_status 429;\s*$/m,
-    },
-    {
-      label: 'notice-level request-limit logging',
-      pattern: /^\s*limit_req_log_level notice;\s*$/m,
-    },
-    {
-      label: 'notice-level connection-limit logging',
-      pattern: /^\s*limit_conn_log_level notice;\s*$/m,
-    },
-    {
       label: 'notice-enabled nginx error log',
       pattern: /^\s*error_log \/var\/log\/nginx\/galatadergisi\.org\/error\.log notice;\s*$/m,
-    },
-    {
-      label: 'throttled JSON response',
-      pattern: new RegExp([
-        String.raw`return 429 '\{"ok":false,"code":"submission_throttled",`,
-        String.raw`"message":"Çok fazla gönderi işleniyor\. `,
-        String.raw`Lütfen bir dakika sonra tekrar deneyin\."\}';`,
-      ].join('')),
-    },
-    {
-      label: 'throttled named error response',
-      pattern: /^\s*error_page 429 = @contribution_throttled;\s*$/m,
-    },
-    {
-      label: 'throttled named location',
-      pattern: /^\s*location @contribution_throttled \{\s*$/m,
-    },
-    {
-      label: 'throttled Retry-After header',
-      pattern: /^\s*add_header Retry-After "60" always;\s*$/m,
-    },
-    {
-      label: 'throttled no-store header',
-      pattern: /^\s*add_header Cache-Control "no-store" always;\s*$/m,
     },
     {
       label: 'stripped Cloudflare visitor address',
@@ -293,6 +216,10 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
       pattern: /\blimit_(?:req|conn)_dry_run\s+on;/,
     },
     {
+      label: 'retired submission proxy configuration',
+      pattern: /client_max_body_size\s+52m|proxy_request_buffering\s+off|galata_(?:dev_)?contribution/,
+    },
+    {
       label: 'origin TLS configuration',
       pattern: /ssl_certificate|\/etc\/letsencrypt|listen\s+443/,
     },
@@ -315,7 +242,6 @@ if (!fs.existsSync(devNginxPath)) {
     [/X-Robots-Tag "noindex, nofollow, noarchive"/, 'dev noindex header'],
     [/location = \/robots\.txt \{[\s\S]*Disallow: \//, 'dev robots crawl denial'],
     [/proxy_pass http:\/\/galata_dev_server;/, 'isolated dev upstream'],
-    [/galata_dev_contribution_rate/, 'isolated dev request limit'],
     [/\/var\/www\/dev\.galatadergisi\.org\/public/, 'isolated dev media root'],
     [/listen 127\.0\.0\.1:8080;/, 'loopback Cloudflare Tunnel origin listener'],
     [/location = \/healthz \{[\s\S]*Cache-Control "no-store, no-cache, must-revalidate"/, 'non-cacheable dev health'],

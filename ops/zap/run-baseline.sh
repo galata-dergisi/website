@@ -14,8 +14,6 @@ while ! curl --fail --silent --show-error --max-time 2 "${target}/healthz" >/dev
   sleep 1
 done
 
-sh /zap/config/check-turnstile-contract.sh
-
 exec zap-baseline.py \
   -t "$target" \
   -c /zap/config/baseline.conf \

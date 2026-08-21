@@ -29,10 +29,6 @@ const copyTargets = [
   ['client/pages/homepage/index.html', 'public/index.html'],
   ['client/pages/homepage/global.css', 'public/global.css'],
   ['client/service-worker.js', 'public/service-worker.js'],
-  [
-    'client/pages/contribute/katkida-bulunun.html',
-    'public/katkida-bulunun/index.html',
-  ],
 ];
 
 function copyAssets() {
@@ -49,6 +45,10 @@ function copyAssets() {
 }
 
 function cleanGeneratedBrowserAssets() {
+  fs.rmSync(
+    path.join(projectRoot, 'public/katkida-bulunun'),
+    { force: true, recursive: true },
+  );
   fs.rmSync(path.join(projectRoot, 'public/assets'), { force: true, recursive: true });
   fs.rmSync(path.join(projectRoot, 'public/.vite'), { force: true, recursive: true });
   fs.rmSync(
@@ -62,7 +62,6 @@ function removeDevelopmentSourceMaps() {
   if (development) return;
   for (const filename of [
     'public/bundle.js.map',
-    'public/katkida-bulunun/bundle.js.map',
     'build/ssr/HomePage.cjs.map',
   ]) {
     fs.rmSync(path.join(projectRoot, filename), { force: true });
@@ -83,43 +82,6 @@ function copiedAssetWatcher() {
       for (const [source] of copyTargets) {
         addSource(path.join(projectRoot, source));
       }
-    },
-  };
-}
-
-function browserConfig({ entry, name, outDir, watchCopiedAssets = false }) {
-  return {
-    configFile: false,
-    mode: development ? 'development' : 'production',
-    root: projectRoot,
-    publicDir: false,
-    clearScreen: false,
-    plugins: [
-      svelte({ configFile: svelteConfig }),
-      watchCopiedAssets && copiedAssetWatcher(),
-    ],
-    build: {
-      emptyOutDir: false,
-      minify: development ? false : 'oxc',
-      outDir: path.join(projectRoot, outDir),
-      sourcemap: development,
-      watch: watch ? {} : null,
-      cssCodeSplit: false,
-      lib: {
-        entry: path.join(projectRoot, entry),
-        name,
-        formats: ['iife'],
-        fileName: () => 'bundle.js',
-        cssFileName: 'bundle',
-      },
-      rolldownOptions: {
-        treeshake: {
-          moduleSideEffects: false,
-        },
-        output: {
-          banner: watch ? liveReloadBanner : undefined,
-        },
-      },
     },
   };
 }
@@ -197,11 +159,6 @@ function ssrConfig() {
 
 const configurations = [
   homepageBrowserConfig(),
-  browserConfig({
-    entry: 'client/pages/contribute/contribute.js',
-    name: 'Contribute',
-    outDir: 'public/katkida-bulunun',
-  }),
   ssrConfig(),
 ];
 

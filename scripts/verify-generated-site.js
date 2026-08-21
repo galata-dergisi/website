@@ -297,8 +297,8 @@ try {
     });
 
   [
-    '/', '/magazines', '/katkida-bulunun', '/feed.xml', '/sitemap.xml', '/robots.txt',
-    '/bundle.js', '/bundle.css', '/katkida-bulunun/bundle.js',
+    '/', '/magazines', '/feed.xml', '/sitemap.xml', '/robots.txt',
+    '/bundle.js', '/bundle.css',
   ].forEach((route) => assert(manifest.routes[route], `missing route ${route}`));
 
   const homepage = readRoute('/');
@@ -426,16 +426,6 @@ try {
         === 'image/webp',
       'carousel placeholder sprite must be served as image/webp',
     );
-    for (const logicalPath of [
-      '/images/favicon.png',
-      '/katkida-bulunun/bundle.css',
-      '/katkida-bulunun/bundle.js',
-    ]) {
-      assert(
-        readRoute('/katkida-bulunun').includes(shellAssetManifest.assets[logicalPath].url),
-        `contribution form does not reference ${logicalPath} with its current version`,
-      );
-    }
   }
 
   const indexableRoutes = Object.keys(manifest.routes).filter((route) => (
@@ -624,20 +614,6 @@ try {
   assert(issueThirtySeven.datePublished === '2020-05-31T21:00:00.000Z', 'issue 37 date mismatch');
   assert(issueFortySeven.datePublished === '2022-02-28T21:00:00.000Z', 'issue 47 date mismatch');
 
-  const contributionForm = readRoute('/katkida-bulunun');
-  assert(
-    contributionForm.includes('<meta name="robots" content="noindex"'),
-    'contribution form noindex missing',
-  );
-  const contributionFormLoadsTurnstile = contributionForm.includes(
-    'https://challenges.cloudflare.com/turnstile/v0/api.js',
-  );
-  assert(
-    development ? !contributionFormLoadsTurnstile : contributionFormLoadsTurnstile,
-    development
-      ? 'development contribution form must not load the Turnstile script'
-      : 'contribution form Turnstile script missing',
-  );
   const sitemap = readRoute('/sitemap.xml');
   assert(sitemap.includes(`${expectedBaseUrl}/dergiler/sayi47`), 'sitemap issue missing');
   assert(sitemap.includes(`${expectedBaseUrl}/katkida-bulunanlar/`), 'sitemap contributor missing');

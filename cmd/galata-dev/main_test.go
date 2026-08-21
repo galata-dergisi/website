@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
-	"log/slog"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,16 +11,6 @@ import (
 	"strings"
 	"testing"
 )
-
-func TestDevelopmentCaptchaVerifierAcceptsOnlyLocalToken(t *testing.T) {
-	verifier := exactCaptchaVerifier{}
-	if err := verifier.Verify(context.Background(), developmentCaptchaToken); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifier.Verify(context.Background(), "not-the-development-token"); err == nil {
-		t.Fatal("invalid development CAPTCHA token was accepted")
-	}
-}
 
 func testSite(t *testing.T, root string) {
 	t.Helper()
@@ -241,23 +226,21 @@ func TestDevelopmentFilesRejectDirectoriesAndTraversal(t *testing.T) {
 	}
 }
 
-func TestDevelopmentStatusAndLocalContribution(t *testing.T) {
+func TestDevelopmentStatus(t *testing.T) {
 	root := t.TempDir()
 	siteRoot := filepath.Join(root, "site")
 	mediaRoot := filepath.Join(root, "public")
-	contributionRoot := filepath.Join(root, "contributions")
 	testSite(t, siteRoot)
 	if err := os.MkdirAll(mediaRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	handler, err := newDevelopmentHandler(serverConfig{
-		SiteRoot:         siteRoot,
-		PublicRoot:       mediaRoot,
-		MediaRoot:        mediaRoot,
-		ContributionsDir: contributionRoot,
-		GenerationToken:  "generation-1",
-		ServerToken:      "server-1",
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		SiteRoot:        siteRoot,
+		PublicRoot:      mediaRoot,
+		MediaRoot:       mediaRoot,
+		GenerationToken: "generation-1",
+		ServerToken:     "server-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,43 +255,5 @@ func TestDevelopmentStatusAndLocalContribution(t *testing.T) {
 		!strings.Contains(status.Body.String(), `"server":"server-1"`) ||
 		status.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("status=%d headers=%v body=%q", status.Code, status.Header(), status.Body)
-	}
-
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	fields := map[string]string{
-		"name":                  "Local Author",
-		"email":                 "author@example.com",
-		"title":                 "Local Video",
-		"assetType":             "video",
-		"message":               "development only",
-		"videoLink":             "https://www.youtube.com/watch?v=test",
-		"cf-turnstile-response": developmentCaptchaToken,
-	}
-	for name, value := range fields {
-		if err := form.WriteField(name, value); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := form.Close(); err != nil {
-		t.Fatal(err)
-	}
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/katkida-bulunun",
-		&body,
-	)
-	request.Header.Set("Content-Type", form.FormDataContentType())
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusCreated {
-		t.Fatalf("contribution status=%d body=%q", response.Code, response.Body.String())
-	}
-	entries, err := os.ReadDir(filepath.Join(contributionRoot, "inbox"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("inbox entries=%d", len(entries))
 	}
 }

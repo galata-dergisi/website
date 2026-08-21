@@ -16,7 +16,6 @@ function runScanner(binary, archive) {
     ...process.env,
     PRIVATE_CONTENT_ARCHIVE: archive,
   };
-  delete environment.TURNSTILE_SECRET_KEY;
   return childProcess.spawnSync(process.execPath, [scanner, binary], {
     cwd: projectRoot,
     encoding: 'utf8',

@@ -82,14 +82,13 @@ export function parseDevelopmentOptions(arguments_, environment = process.env) {
   const options = {
     port: 3000,
     mediaRoot: defaultMediaRoot,
-    contributionsDir: path.join(repoRoot, 'contributions'),
   };
   const configured = new Set();
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === '--') continue;
     const name = argument.split('=', 1)[0];
-    if (!['--port', '--media-root', '--contributions-dir'].includes(name)) {
+    if (!['--port', '--media-root'].includes(name)) {
       fail(`Unknown development option: ${argument}`);
     }
     const { value, consumed } = optionValue(arguments_, index, name);
@@ -101,9 +100,6 @@ export function parseDevelopmentOptions(arguments_, environment = process.env) {
     } else if (name === '--media-root') {
       options.mediaRoot = path.resolve(repoRoot, value);
       configured.add('mediaRoot');
-    } else {
-      options.contributionsDir = path.resolve(repoRoot, value);
-      configured.add('contributionsDir');
     }
   }
   if (!configured.has('port')) {
@@ -114,13 +110,6 @@ export function parseDevelopmentOptions(arguments_, environment = process.env) {
       environment,
       'EXTERNAL_MEDIA_DIR',
       defaultMediaRoot,
-    );
-  }
-  if (!configured.has('contributionsDir')) {
-    options.contributionsDir = configuredDevelopmentPath(
-      environment,
-      'CONTRIBUTIONS_DIR',
-      path.join(repoRoot, 'contributions'),
     );
   }
   if (options.port < 1 || options.port > 65535) {
@@ -285,7 +274,6 @@ function serverArguments(candidate, options) {
     '--site-root', candidate.siteRoot,
     '--public-root', publicRoot,
     '--media-root', options.mediaRoot,
-    '--contributions-dir', options.contributionsDir,
     '--generation-token', candidate.generation,
     '--server-token', candidate.serverToken,
   ];
@@ -602,7 +590,6 @@ async function main() {
     path.join(repoRoot, 'scripts', 'verify-generated-site.js'),
     path.join(repoRoot, 'scripts', 'lib', '**', '*.js'),
     path.join(repoRoot, 'client', 'pages', 'homepage', 'index.html'),
-    path.join(repoRoot, 'client', 'pages', 'contribute', 'katkida-bulunun.html'),
     ssrOutput,
   ], watcherOptions);
   generationWatcher.on('all', (_event, filename) => {
@@ -662,7 +649,6 @@ async function main() {
 
   await waitForFrontendReady(frontendBuildChild);
   if (stopping) return;
-  log(`local contributions persist in ${options.contributionsDir}`);
   log(`ready at ${developmentUrl(options.port)}`);
 }
 

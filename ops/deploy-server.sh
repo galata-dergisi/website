@@ -17,7 +17,7 @@ note() { printf 'deploy-server: %s\n' "$*"; }
 usage() {
   cat <<'EOF'
 Usage:
-  ./ops/deploy-server.sh configure [--rotate-turnstile]
+  ./ops/deploy-server.sh configure
   ./ops/deploy-server.sh tunnel-setup [--rotate-token]
   ./ops/deploy-server.sh deploy <dev|production> --release-dir DIR --media-root DIR [--yes]
   ./ops/deploy-server.sh verify <dev|production> [--public]
@@ -229,25 +229,14 @@ make_bundle() {
 }
 
 write_environments() {
-  local rotate=$1 secret
-  if [[ $rotate == false ]] && admin_ssh 'sudo -n test -f /etc/galata/production.env && sudo -n test -f /etc/galata/dev.env'; then
-    admin_ssh 'sudo -n cat /etc/galata/production.env' > "$BUNDLE/production.env"
-    admin_ssh 'sudo -n cat /etc/galata/dev.env' > "$BUNDLE/dev.env"
-    return
-  fi
-  read_secret 'Turnstile secret'; secret=$REPLY
-  [[ $secret =~ ^[A-Za-z0-9._-]+$ ]] || die "Turnstile secret contains unsupported characters"
-  write_runtime_environment production "$secret" > "$BUNDLE/production.env"
-  write_runtime_environment dev "$secret" > "$BUNDLE/dev.env"
-  unset secret REPLY
+  write_runtime_environment production > "$BUNDLE/production.env"
+  write_runtime_environment dev > "$BUNDLE/dev.env"
   chmod 0600 "$BUNDLE/production.env" "$BUNDLE/dev.env"
 }
 
 configure_command() {
-  local rotate_turnstile=false argument remote_dir helper_tmp
-  for argument in "$@"; do
-    case $argument in --rotate-turnstile) rotate_turnstile=true ;; *) die "unknown configure option: $argument" ;; esac
-  done
+  local argument remote_dir helper_tmp
+  [[ $# == 0 ]] || die "configure takes no options"
   [[ -t 0 ]] || die "configure is workstation-only and interactive"
   start_admin_control
   admin_ssh 'sudo -n true' || die "administrator connection or passwordless sudo failed"
@@ -261,7 +250,7 @@ configure_command() {
     die "refusing to overwrite an incomplete deployment key pair at $DEPLOY_KEY_PATH"
   fi
   make_bundle
-  write_environments "$rotate_turnstile"
+  write_environments
   remote_dir=$(admin_ssh 'mktemp -d /tmp/galata-phase2.XXXXXX')
   helper_tmp=$(admin_ssh 'mktemp /tmp/galata-deploy-helper.XXXXXX')
   admin_scp "$REPO_ROOT/ops/deploy-helper.sh" "$ADMIN_TARGET:$helper_tmp" >/dev/null
@@ -278,9 +267,7 @@ configure_command() {
   deploy_ssh '
     sudo -n /usr/local/sbin/galata-deploy-helper status >/dev/null || exit 10
     test ! -r /etc/galata/production.env \
-      && test ! -r /etc/cloudflared/tunnel-token \
-      && test ! -r /var/lib/galata-contributions \
-      && test ! -r /var/lib/galata-dev-contributions || exit 11
+      && test ! -r /etc/cloudflared/tunnel-token || exit 11
     if sudo -n id >/dev/null 2>&1; then exit 12; fi
   ' || die "fresh restricted deployment login or security-boundary validation failed"
   note "configuration complete; add the displayed known_hosts data and private key to GitHub Environments"

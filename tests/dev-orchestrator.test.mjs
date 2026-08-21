@@ -20,22 +20,18 @@ test('development CLI uses loopback workflow defaults', () => {
     options.mediaRoot,
     /galata-dergisi-static-assets[/\\]server-assets[/\\]public$/,
   );
-  assert.equal(path.basename(options.contributionsDir), 'contributions');
 });
 
 test('development CLI accepts documented flags and rejects unsafe ambiguity', () => {
   const options = parseDevelopmentOptions([
     '--port=3100',
     '--media-root', 'local-media',
-    '--contributions-dir', 'local-inbox',
   ], {
     LISTEN_ADDR: '0.0.0.0:9999',
     EXTERNAL_MEDIA_DIR: '',
-    CONTRIBUTIONS_DIR: '',
   });
   assert.equal(options.port, 3100);
   assert.equal(path.basename(options.mediaRoot), 'local-media');
-  assert.equal(path.basename(options.contributionsDir), 'local-inbox');
   assert.throws(
     () => parseDevelopmentOptions(['--port', '0'], {}),
     /between 1 and 65535/,
@@ -50,12 +46,9 @@ test('development uses production-style environment variables as defaults', () =
   const options = parseDevelopmentOptions([], {
     LISTEN_ADDR: '127.0.0.1:3200',
     EXTERNAL_MEDIA_DIR: 'configured-media',
-    CONTRIBUTIONS_DIR: 'configured-inbox',
-    TURNSTILE_SECRET_KEY: 'not-used-in-development',
   });
   assert.equal(options.port, 3200);
   assert.equal(path.basename(options.mediaRoot), 'configured-media');
-  assert.equal(path.basename(options.contributionsDir), 'configured-inbox');
 });
 
 test('development rejects unsafe addresses and empty environment paths', () => {
@@ -77,10 +70,6 @@ test('development rejects unsafe addresses and empty environment paths', () => {
   assert.throws(
     () => parseDevelopmentOptions([], { EXTERNAL_MEDIA_DIR: '  ' }),
     /EXTERNAL_MEDIA_DIR must not be empty/,
-  );
-  assert.throws(
-    () => parseDevelopmentOptions([], { CONTRIBUTIONS_DIR: '' }),
-    /CONTRIBUTIONS_DIR must not be empty/,
   );
 });
 
@@ -109,7 +98,7 @@ test('development generates and watches the carousel sheet', () => {
   assert.match(viteSource, /process\.send\(\{ type: frontendReadyMessage \}\)/);
   assert.match(
     developmentSource,
-    /await waitForFrontendReady\(frontendBuildChild\);[\s\S]+log\(`local contributions persist[\s\S]+log\(`ready at/,
+    /await waitForFrontendReady\(frontendBuildChild\);[\s\S]+log\(`ready at/,
   );
   assert.match(
     gitignoreSource,

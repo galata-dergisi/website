@@ -60,8 +60,6 @@ database.
 - `/robots.txt` advertises the sitemap.
 - Compatibility magazine JSON routes and issue SEO JSON retain
   `X-Robots-Tag: noindex`.
-- The private-submission form at `/katkida-bulunun` publishes
-  `<meta name="robots" content="noindex">`.
 - Recitation and inline-media links retain their physical page plus stable
   `#ses-…` and `#gorsel-…` fragments.
 

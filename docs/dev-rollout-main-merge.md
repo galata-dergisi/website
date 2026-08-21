@@ -44,8 +44,8 @@ Outstanding merge gates:
 
 - Push `dev` and obtain a successful pull-request CI run and review.
 - Build a clean immutable release and deploy it to the dev slot.
-- Complete authenticated, unauthenticated, contribution, media, rate-limit,
-  rollback, and observation-window checks on the deployed release.
+- Complete authenticated, unauthenticated, media, service-worker, rollback, and
+  observation-window checks on the deployed release.
 
 ## 1. Work from a stable connection
 
@@ -213,9 +213,9 @@ rollout notes.
 
 ## 6. Recheck the foundation without reconfiguring it
 
-Phase 2 and the tunnel are already configured. Do not rotate the Turnstile
-secret or tunnel token, and do not rerun `configure` merely because this is the
-first application deployment.
+Phase 2 and the tunnel are already configured. Do not rotate the tunnel token,
+and do not rerun `configure` merely because this is the first application
+deployment.
 
 ```sh
 ssh galata 'systemctl is-active cloudflared.service && \
@@ -230,7 +230,7 @@ The unauthenticated request must return `302`, `303`, or `307` with an HTTPS
 `/cdn-cgi/access/login/` location. Nginx, helper, and service files matched the
 branch during this assessment. Rerun `deploy-server.sh configure` only if one
 of those tracked files subsequently changes or a hash comparison proves drift;
-do not pass `--rotate-turnstile` unless rotation is deliberate.
+`configure` now takes no feature-specific secret option.
 
 ## 7. Deploy only the dev slot
 
@@ -271,7 +271,7 @@ defaults as a workaround.
 Sign in through Cloudflare Access with an allowed identity and check:
 
 1. `/healthz` reports the embedded site release from the manifest.
-2. The homepage, contribution form, early and late issues, continuation pages,
+2. The homepage, early and late issues, continuation pages,
    contributor pages, canonical redirects, and JSON aliases load correctly.
 3. Back/forward navigation, direct issue reload, keyboard navigation, focus
    restoration, reader loading/retry states, and responsive layouts work.
@@ -280,10 +280,7 @@ Sign in through Cloudflare Access with an allowed identity and check:
 5. External images load and an audio range request returns partial content.
 6. The service worker installs and a reload/update does not strand the browser
    on the previous release.
-7. A complete test contribution is accepted and appears only under
-   `/var/lib/galata-dev-contributions`, never the production contribution root.
-8. The documented rapid-request and concurrent-upload checks return the
-   expected `429` contract without affecting ordinary site traffic.
+7. `/katkida-bulunun` returns `404`, and a `POST` to that path is rejected.
 
 Then use a private session with a disallowed identity and confirm the entire
 dev hostname remains unavailable through Cloudflare Access.
@@ -311,7 +308,7 @@ observation window.
 Use at least a 24-hour observation window for this first deployment unless a
 longer period is agreed. During and after the window, check for restart loops,
 panics, nginx errors, tunnel instability, unexpected `4xx`/`5xx` responses,
-media failures, and contribution-processing errors.
+and media failures.
 
 ```sh
 ./ops/deploy-server.sh verify dev --public
@@ -337,7 +334,7 @@ Merge only when all of these statements are true:
 - the pull-request head is the exact commit deployed to dev;
 - all local gates, both ZAP scans, and exact-SHA CI are green;
 - authenticated and denied-user Access checks pass;
-- contribution, media, rate-limit, service-worker, and rollback checks pass;
+- media, retired-route, service-worker, and rollback checks pass;
 - the observation window has no unresolved errors;
 - the 110,000-byte transfer ceiling and very small JavaScript size margin have
   been explicitly accepted;

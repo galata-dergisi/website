@@ -84,8 +84,6 @@ const needles = [
   'SQLite format 3\u0000',
   ...privateNeedles(privateArchive),
 ];
-if (process.env.TURNSTILE_SECRET_KEY) needles.push(process.env.TURNSTILE_SECRET_KEY);
-
 binaries.forEach((binary) => {
   if (!fs.existsSync(binary)) throw new Error(`Missing binary: ${binary}`);
   const content = fs.readFileSync(binary);

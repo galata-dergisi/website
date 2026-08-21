@@ -472,18 +472,12 @@ install_runtime_foundation() {
 
   install -d -o root -g root -m 0755 /opt/galata /opt/galata/releases
   install -d -o root -g root -m 0750 /etc/galata
-  install -d -o "$RUNTIME_USER" -g "$RUNTIME_USER" -m 0700 \
-    /var/lib/galata-contributions
   install -d -o root -g www-data -m 0750 \
     /var/www/galatadergisi.org /var/www/galatadergisi.org/public
 
   install_managed_file /etc/galata/production.env.example 0600 root root <<EOF
 # $MANAGED_MARKER
 LISTEN_ADDR=127.0.0.1:3000
-CONTRIBUTIONS_DIR=/var/lib/galata-contributions
-EXTERNAL_MEDIA_DIR=/var/www/galatadergisi.org/public
-TURNSTILE_ALLOWED_HOSTNAMES=galatadergisi.org,www.galatadergisi.org
-TURNSTILE_SECRET_KEY=
 EOF
 
   install_managed_file /etc/systemd/system/galata-server.service 0644 root root <<EOF
@@ -507,8 +501,6 @@ RestartSec=5s
 TimeoutStopSec=25s
 UMask=0077
 LimitCORE=0
-StateDirectory=galata-contributions
-StateDirectoryMode=0700
 NoNewPrivileges=yes
 PrivateDevices=yes
 PrivateTmp=yes
@@ -865,9 +857,6 @@ remote_verify() {
     assert_sysctl "$key" "$value"
   done
 
-  [ "$(stat -c '%U:%G %a' /var/lib/galata-contributions)" = \
-    "$RUNTIME_USER:$RUNTIME_USER 700" ] \
-    || die "contribution directory permissions are wrong"
   [ "$(stat -c '%U:%G %a' /etc/galata/production.env.example)" = 'root:root 600' ] \
     || die "environment template permissions are wrong"
   [ ! -e /etc/galata/production.env ] \

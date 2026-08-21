@@ -14,7 +14,6 @@ const serviceWorkerOutput = path.join(projectRoot, 'public', 'service-worker.js'
 const VERSION_MARKER = '__GALATA_ASSET_VERSION__';
 const PRECACHE_MARKER = '/* __GALATA_PRECACHE_URLS__ */ []';
 const READER_MARKER = '/* __GALATA_READER_WARM_URLS__ */ []';
-const CONTRIBUTION_MARKER = '/* __GALATA_CONTRIBUTION_URLS__ */ []';
 
 function replaceExactlyOnce(source, marker, replacement) {
   const first = source.indexOf(marker);
@@ -55,12 +54,6 @@ export function finalizeServiceWorker({ allowMissing = false } = {}) {
     READER_MARKER,
     JSON.stringify(assetManifest.groups.reader, null, 2),
   );
-  generated = replaceExactlyOnce(
-    generated,
-    CONTRIBUTION_MARKER,
-    JSON.stringify(assetManifest.groups.contribution, null, 2),
-  );
-
   fs.mkdirSync(path.dirname(serviceWorkerOutput), { recursive: true });
   const previous = fs.existsSync(serviceWorkerOutput)
     ? fs.readFileSync(serviceWorkerOutput, 'utf8')
@@ -74,7 +67,6 @@ export function finalizeServiceWorker({ allowMissing = false } = {}) {
     precacheCount: assetManifest.groups.homepage.length,
     precacheURLs: assetManifest.groups.homepage,
     readerWarmURLs: assetManifest.groups.reader,
-    contributionURLs: assetManifest.groups.contribution,
     assetManifest,
   };
 }

@@ -1,8 +1,7 @@
 // Copyright 2026 Mehmet Baker
 //
 // Shared HTTP application routing used by the production and development
-// binaries. Runtime-specific file serving and CAPTCHA verification stay in
-// their respective commands.
+// binaries.
 package application
 
 import (
@@ -16,7 +15,6 @@ import (
 type Config struct {
 	Site            http.Handler
 	SiteRelease     string
-	Contributions   http.Handler
 	ConfigureRoutes func(*http.ServeMux)
 }
 
@@ -24,15 +22,11 @@ func New(config Config) (http.Handler, error) {
 	if config.Site == nil {
 		return nil, errors.New("site handler is required")
 	}
-	if config.Contributions == nil {
-		return nil, errors.New("contribution handler is required")
-	}
 	if config.SiteRelease == "" {
 		return nil, errors.New("site release is required")
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /katkida-bulunun", config.Contributions)
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 		writer.Header().Set("X-Content-Type-Options", "nosniff")

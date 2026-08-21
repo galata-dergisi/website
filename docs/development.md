@@ -30,7 +30,7 @@ The production build remains `npm run build`; it still generates
 `internal/site/dist/` for embedding in the production Go binary. Development
 uses the programmatic Vite builder to emit unminified, source-mapped IIFE
 bundles and the CommonJS Svelte SSR adapter; production emits minified IIFEs
-with the same `public/bundle.js`, `public/bundle.css`, contribution, and
+with the same `public/bundle.js`, `public/bundle.css`, and
 `build/ssr/HomePage.cjs` paths. Development generations are isolated in
 versioned directories below `build/dev-sites/`.
 Production builds and `npm run dev` regenerate the ignored, low-resolution
@@ -48,16 +48,13 @@ cp .env.example .env.development
 ```
 
 `npm run dev` loads `.env.development` once at startup when it exists. An inherited
-shell value overrides the file, and `--port`, `--media-root`, or
-`--contributions-dir` overrides both. Restart development after editing the
-file.
+shell value overrides the file, and `--port` or `--media-root` overrides both.
+Restart development after editing the file.
 
 Development reads the port from `LISTEN_ADDR`, which must use
-`127.0.0.1:<port>`. `EXTERNAL_MEDIA_DIR` selects the local media tree and
-`CONTRIBUTIONS_DIR` selects the private development inbox. Relative paths are
-resolved from the repository root. Other values are passed to child processes,
-but `TURNSTILE_SECRET_KEY` does not enable the production verifier: development
-keeps its fixed offline verification flow.
+`127.0.0.1:<port>`. `EXTERNAL_MEDIA_DIR` selects the local media tree. Relative
+paths are resolved from the repository root. Other values are passed to child
+processes.
 
 The same `.env.example` is the starting point for `.env.production`. Remove or
 edit values that do not apply to the selected mode. Both local mode files are
@@ -88,9 +85,8 @@ the accepted server name to `localhost`, supplies a local TLS include, and uses
 a generated self-signed certificate for `localhost` and `127.0.0.1`. A browser
 will show a certificate warning; accept it only for this local endpoint. The
 site otherwise retains production canonical URLs, cache behavior, service
-worker registration, analytics, Turnstile widget, security headers, upload
-limits, and contribution throttling. Local visits can therefore load and send
-events to the production third-party analytics and Turnstile services.
+worker registration, analytics, and security headers. Local visits can
+therefore send events to the production analytics service.
 
 The preview mounts the sibling production media checkout read-only at nginx's
 production media path. Use an absolute alternate path or port when needed:
@@ -101,24 +97,6 @@ GALATA_MEDIA_ROOT=/absolute/path/to/server-assets/public \
   npm run preview:production
 ```
 
-The production server requires a Turnstile secret even when only read paths are
-being tested, so the preview supplies a non-secret placeholder by default. Set
-`TURNSTILE_SECRET_KEY` in the shell or `.env.production` to exercise the real
-verifier. An empty example value uses the preview placeholder. A successful
-submission is still not guaranteed on localhost because the production server
-accepts only Turnstile results for `galatadergisi.org` and
-`www.galatadergisi.org`. Missing-token and honeypot rejection paths behave
-exactly as production and do not contact Turnstile.
-
-Contribution state uses a private named Docker volume and survives normal
-rebuilds and shutdowns. Copy the inbox out for inspection while the stack is
-running with:
-
-```sh
-docker compose -f ops/local-production/compose.yaml \
-  cp app:/var/lib/galata-contributions/inbox ./production-preview-inbox
-```
-
 Follow both application and nginx logs or stop the preview with:
 
 ```sh
@@ -126,17 +104,15 @@ docker compose -f ops/local-production/compose.yaml logs --follow
 npm run preview:production:down
 ```
 
-The down command preserves contribution data. Adding `--volumes` to the raw
-Docker Compose down command permanently removes the preview inbox. To build a
-separate preview stack and verify HTTPS, production rendering, caching, media,
-Turnstile rejection, and nginx rate limits, run:
+To build a separate preview stack and verify HTTPS, production rendering,
+caching, media, and the retired submission route, run:
 
 ```sh
 npm run test:production-preview
 ```
 
-The smoke command uses port `44444` and its own temporary Compose project and
-volume, then removes only those isolated resources.
+The smoke command uses port `44444` and its own temporary Compose project, then
+removes only those isolated resources.
 
 ## Local media
 
@@ -182,7 +158,7 @@ supported.
 ```sh
 npm run dev
 npm run dev -- --port 3100
-npm run dev -- --port 3100 --media-root public --contributions-dir contributions
+npm run dev -- --port 3100 --media-root public
 ```
 
 The defaults are:
@@ -190,21 +166,14 @@ The defaults are:
 - URL: `http://127.0.0.1:3000`
 - media root:
   `../galata-dergisi-static-assets/server-assets/public`
-- private contribution root: `contributions`
 
 The server binds only to loopback and prints its URL without opening a browser.
 Vite LiveReload also binds only to loopback, on port `35729`; stop the process
 already using that port if the watcher reports `EADDRINUSE`. `--port` changes
 the application server port, not the LiveReload port.
-Development pages are marked `noindex`; analytics, Cloudflare Turnstile, and
-service worker registration are omitted. The page also unregisters an earlier
-localhost service worker and removes `galatadergisi-` browser caches.
-
-The contribution form displays a development notice and uses a fixed local
-verification token. Accepted submissions are written to
-`contributions/inbox/`; the ignored `contributions/` directory persists until
-you remove entries manually. Nothing submitted in development is published or
-sent to Cloudflare.
+Development pages are marked `noindex`; analytics and service worker
+registration are omitted. The page also unregisters an earlier localhost
+service worker and removes `galatadergisi-` browser caches.
 
 ## Rebuild and recovery behavior
 

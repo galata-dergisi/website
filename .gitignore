@@ -78,6 +78,8 @@ utility-scripts/
 *.sql
 sql-backups/
 database-exports/
+# Retain any historical private submissions outside version control.
+contributions/
 uploads/
 internal/site/dist/*
 !internal/site/dist/placeholder.txt

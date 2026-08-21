@@ -11,21 +11,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/galata-dergisi/galata-dergisi/internal/application"
-	"github.com/galata-dergisi/galata-dergisi/internal/contributions"
 	"github.com/galata-dergisi/galata-dergisi/internal/dotenv"
 	"github.com/galata-dergisi/galata-dergisi/internal/site"
 )
 
 const productionEnvironmentFilename = ".env.production"
-
-var hostnameLabelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 func loadProductionEnvironment(arguments []string) (string, error) {
 	flags := flag.NewFlagSet("galata-server", flag.ContinueOnError)
@@ -61,85 +56,18 @@ func loadProductionEnvironment(arguments []string) (string, error) {
 	return loaded, nil
 }
 
-func requiredEnvironment(name string) (string, error) {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return "", errors.New(name + " is required")
-	}
-	return value, nil
-}
-
-func parseAllowedHostnames(value string) ([]string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, errors.New("TURNSTILE_ALLOWED_HOSTNAMES is required")
-	}
-
-	seen := make(map[string]struct{})
-	hostnames := make([]string, 0, strings.Count(value, ",")+1)
-	for _, rawHostname := range strings.Split(value, ",") {
-		hostname := strings.TrimSpace(rawHostname)
-		if hostname == "" || hostname != strings.ToLower(hostname) || len(hostname) > 253 {
-			return nil, fmt.Errorf("invalid Turnstile hostname %q", rawHostname)
-		}
-		for _, label := range strings.Split(hostname, ".") {
-			if !hostnameLabelPattern.MatchString(label) {
-				return nil, fmt.Errorf("invalid Turnstile hostname %q", rawHostname)
-			}
-		}
-		if _, exists := seen[hostname]; exists {
-			return nil, fmt.Errorf("duplicate Turnstile hostname %q", hostname)
-		}
-		seen[hostname] = struct{}{}
-		hostnames = append(hostnames, hostname)
-	}
-	return hostnames, nil
-}
-
 func run(arguments []string) error {
 	if _, err := loadProductionEnvironment(arguments); err != nil {
 		return err
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	contributionRoot, err := requiredEnvironment("CONTRIBUTIONS_DIR")
-	if err != nil {
-		return err
-	}
-	turnstileSecret, err := requiredEnvironment("TURNSTILE_SECRET_KEY")
-	if err != nil {
-		return err
-	}
-	allowedHostnames, err := parseAllowedHostnames(os.Getenv("TURNSTILE_ALLOWED_HOSTNAMES"))
-	if err != nil {
-		return err
-	}
-
 	staticSite, err := site.NewEmbedded()
 	if err != nil {
 		return err
 	}
-	forbiddenRoots := []string{}
-	if mediaRoot := strings.TrimSpace(os.Getenv("EXTERNAL_MEDIA_DIR")); mediaRoot != "" {
-		forbiddenRoots = append(forbiddenRoots, mediaRoot)
-	}
-	contributionHandler, err := contributions.New(contributions.Config{
-		Root:          contributionRoot,
-		MaxConcurrent: 8,
-		Verifier: &contributions.TurnstileVerifier{
-			Secret:           turnstileSecret,
-			ExpectedAction:   "contribution",
-			AllowedHostnames: allowedHostnames,
-		},
-		Logger:         logger,
-		ForbiddenRoots: forbiddenRoots,
-	})
-	if err != nil {
-		return err
-	}
 	handler, err := application.New(application.Config{
-		Site:          staticSite,
-		SiteRelease:   staticSite.Release(),
-		Contributions: contributionHandler,
+		Site:        staticSite,
+		SiteRelease: staticSite.Release(),
 	})
 	if err != nil {
 		return err
@@ -176,7 +104,6 @@ func run(arguments []string) error {
 		"server starting",
 		"address", address,
 		"release", staticSite.Release(),
-		"contributions_dir", filepath.Clean(contributionRoot),
 	)
 	err = server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {

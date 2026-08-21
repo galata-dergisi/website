@@ -18,10 +18,7 @@ const {
   homepageArtworkSources,
   readHomepageImageManifest,
 } = require('./lib/homepage-images.js');
-const {
-  applyShellAssetVersions,
-  readShellAssetManifest,
-} = require('./lib/shell-assets.js');
+const { readShellAssetManifest } = require('./lib/shell-assets.js');
 const {
   renderDevelopmentDocument,
 } = require('./lib/development-rendering.js');
@@ -381,19 +378,6 @@ function main(arguments_ = process.argv.slice(2)) {
     redirects[`${canonical}/`] = canonical;
   });
 
-  const contributionDocument = fs.readFileSync(
-    path.join(REPO_ROOT, 'client/pages/contribute/katkida-bulunun.html'),
-    'utf8',
-  );
-  addRoute(
-    '/katkida-bulunun',
-    assetManifest
-      ? applyShellAssetVersions(contributionDocument, assetManifest)
-      : contributionDocument,
-    CONTENT_TYPES['.html'],
-  );
-  redirects['/katkida-bulunun/'] = '/katkida-bulunun';
-
   addRoute('/sitemap.xml', renderSitemap(
     baseUrl,
     publicContent.getSitemapData(),
@@ -418,8 +402,6 @@ function main(arguments_ = process.argv.slice(2)) {
     'bundle.js',
     'global.css',
     'service-worker.js',
-    'katkida-bulunun/bundle.css',
-    'katkida-bulunun/bundle.js',
     'fonts/akaDora.woff2',
     'images/carousel-thumbnail-placeholders.webp',
     'images/bant.jpg',

@@ -27,21 +27,18 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 COPY --from=site-builder /src/internal/site/dist/ internal/site/dist/
 
-RUN mkdir -p /out/contributions \
-    && CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
         -buildvcs=false \
         -trimpath \
         -ldflags="-s -w" \
         -o /out/galata-server \
         ./cmd/galata-server
 
-# The production-mode scan target contains only the statically linked server,
-# its CA roots, and its private writable inbox. It is not a deployment image.
+# The production-mode scan target contains only the statically linked server.
+# It is not a deployment image.
 FROM scratch AS scan-target
 
-COPY --from=server-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=server-builder /out/galata-server /galata-server
-COPY --from=server-builder --chown=65532:65532 /out/contributions/ /var/lib/galata-contributions/
 
 USER 65532:65532
 EXPOSE 3000

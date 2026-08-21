@@ -13,7 +13,7 @@ const {
   readHomepageImageManifest,
 } = require('./homepage-images.js');
 
-const MANIFEST_VERSION = 2;
+const MANIFEST_VERSION = 3;
 const VERSION_LENGTH = 16;
 const MANIFEST_RELATIVE_PATH = 'build/shell-assets.json';
 
@@ -21,8 +21,6 @@ const shellAssetEntries = [
   ['/bundle.css', 'public/bundle.css'],
   ['/bundle.js', 'public/bundle.js'],
   ['/global.css', 'public/global.css'],
-  ['/katkida-bulunun/bundle.css', 'public/katkida-bulunun/bundle.css'],
-  ['/katkida-bulunun/bundle.js', 'public/katkida-bulunun/bundle.js'],
   ['/fonts/akaDora.woff2', 'public/fonts/akaDora.woff2'],
   ['/images/carousel-thumbnail-placeholders.webp', 'public/images/carousel-thumbnail-placeholders.webp'],
   ['/images/favicon.png', 'public/images/favicon.png'],
@@ -37,8 +35,6 @@ const textAssetPaths = new Set([
   '/bundle.css',
   '/bundle.js',
   '/global.css',
-  '/katkida-bulunun/bundle.css',
-  '/katkida-bulunun/bundle.js',
 ]);
 
 const unversionedAssetPaths = new Set([
@@ -134,7 +130,7 @@ function validateShellAssetManifest(manifest) {
     throw new Error('Shell asset manifest is invalid. Run the client build again.');
   }
   const groupNames = Object.keys(manifest.groups).sort(compareCodepoint);
-  if (JSON.stringify(groupNames) !== JSON.stringify(['contribution', 'homepage', 'reader'])) {
+  if (JSON.stringify(groupNames) !== JSON.stringify(['homepage', 'reader'])) {
     throw new Error('Shell asset manifest groups are invalid.');
   }
   Object.entries(manifest.assets).forEach(([logicalPath, entry]) => {
@@ -219,10 +215,6 @@ function createShellAssetManifest(projectRoot) {
       ...Object.values(homepageImages.artwork).map((asset) => resolve(asset.url)),
     ],
     reader: readerLeafPaths.map(resolve),
-    contribution: [
-      resolve('/katkida-bulunun/bundle.js'),
-      resolve('/katkida-bulunun/bundle.css'),
-    ],
   };
 
   const manifest = stableManifest(assets, groups);

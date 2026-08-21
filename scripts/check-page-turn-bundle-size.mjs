@@ -30,7 +30,6 @@ const shell = readShellAssetManifest(projectRoot);
 const siteRoot = path.join(projectRoot, 'internal/site/dist');
 const siteManifest = JSON.parse(fs.readFileSync(path.join(siteRoot, 'manifest.json'), 'utf8'));
 const homeRoute = siteManifest.routes['/'];
-const homeDocument = fs.readFileSync(path.join(siteRoot, homeRoute.file), 'utf8');
 
 function outputContent(asset) {
   return fs.readFileSync(path.join(projectRoot, asset.file));
@@ -111,15 +110,10 @@ assert.ok(
   `unique service-worker install overhead exceeds ${INSTALL_OVERHEAD_CEILING} bytes: ${uniqueInstallOverhead}`,
 );
 
-shell.groups.contribution.forEach((url) => {
-  const pathname = new URL(url, 'https://galatadergisi.org').pathname;
-  assert.equal(homeDocument.includes(pathname), false, `homepage references contribution asset: ${pathname}`);
-});
-
-const templates = [
-  'client/pages/homepage/index.html',
-  'client/pages/contribute/katkida-bulunun.html',
-].map((filename) => fs.readFileSync(path.join(projectRoot, filename), 'utf8')).join('\n');
+const templates = fs.readFileSync(
+  path.join(projectRoot, 'client/pages/homepage/index.html'),
+  'utf8',
+);
 assert.doesNotMatch(templates, /googletag|google-analytics|fonts\.googleapis/i);
 
 console.log([

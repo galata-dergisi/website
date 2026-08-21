@@ -25,11 +25,8 @@ import (
 	"time"
 
 	"github.com/galata-dergisi/galata-dergisi/internal/application"
-	"github.com/galata-dergisi/galata-dergisi/internal/contributions"
 	"github.com/galata-dergisi/galata-dergisi/internal/site"
 )
-
-const developmentCaptchaToken = "galata-development"
 
 var audioPathPattern = regexp.MustCompile(
 	`^/magazines/sayi([1-9][0-9]*)/audio/(.+)$`,
@@ -38,15 +35,6 @@ var audioPathPattern = regexp.MustCompile(
 var issueImagePathPattern = regexp.MustCompile(
 	`^/images/sayi[1-9][0-9]*/`,
 )
-
-type exactCaptchaVerifier struct{}
-
-func (exactCaptchaVerifier) Verify(_ context.Context, token string) error {
-	if token != developmentCaptchaToken {
-		return errors.New("development captcha token is invalid")
-	}
-	return nil
-}
 
 type developmentFiles struct {
 	publicRoot string
@@ -80,8 +68,7 @@ func (handler developmentFiles) ServeHTTP(
 		return
 	}
 	if request.URL.Path == "/__dev/status" ||
-		request.URL.Path == "/healthz" ||
-		request.URL.Path == "/katkida-bulunun" {
+		request.URL.Path == "/healthz" {
 		handler.next.ServeHTTP(writer, request)
 		return
 	}
@@ -178,32 +165,21 @@ func (handler developmentFiles) ServeHTTP(
 }
 
 type serverConfig struct {
-	SiteRoot         string
-	PublicRoot       string
-	MediaRoot        string
-	ContributionsDir string
-	GenerationToken  string
-	ServerToken      string
+	SiteRoot        string
+	PublicRoot      string
+	MediaRoot       string
+	GenerationToken string
+	ServerToken     string
 }
 
-func newDevelopmentHandler(config serverConfig, logger *slog.Logger) (http.Handler, error) {
+func newDevelopmentHandler(config serverConfig) (http.Handler, error) {
 	staticSite, err := site.New(os.DirFS(config.SiteRoot))
 	if err != nil {
 		return nil, err
 	}
-	contributionHandler, err := contributions.New(contributions.Config{
-		Root:           config.ContributionsDir,
-		Verifier:       exactCaptchaVerifier{},
-		Logger:         logger,
-		ForbiddenRoots: []string{config.PublicRoot, config.MediaRoot, config.SiteRoot},
-	})
-	if err != nil {
-		return nil, err
-	}
 	app, err := application.New(application.Config{
-		Site:          staticSite,
-		SiteRelease:   staticSite.Release(),
-		Contributions: contributionHandler,
+		Site:        staticSite,
+		SiteRelease: staticSite.Release(),
 		ConfigureRoutes: func(mux *http.ServeMux) {
 			mux.HandleFunc("/__dev/status", func(
 				writer http.ResponseWriter,
@@ -238,13 +214,12 @@ func newDevelopmentHandler(config serverConfig, logger *slog.Logger) (http.Handl
 }
 
 type options struct {
-	port             int
-	siteRoot         string
-	publicRoot       string
-	mediaRoot        string
-	contributionsDir string
-	generationToken  string
-	serverToken      string
+	port            int
+	siteRoot        string
+	publicRoot      string
+	mediaRoot       string
+	generationToken string
+	serverToken     string
 }
 
 func parseOptions(arguments []string) (options, error) {
@@ -255,12 +230,6 @@ func parseOptions(arguments []string) (options, error) {
 	flags.StringVar(&result.siteRoot, "site-root", "", "generated development site")
 	flags.StringVar(&result.publicRoot, "public-root", "public", "built browser asset root")
 	flags.StringVar(&result.mediaRoot, "media-root", "public", "local public/media root")
-	flags.StringVar(
-		&result.contributionsDir,
-		"contributions-dir",
-		"contributions",
-		"private local contribution inbox",
-	)
 	flags.StringVar(
 		&result.generationToken,
 		"generation-token",
@@ -301,13 +270,12 @@ func run(arguments []string) error {
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler, err := newDevelopmentHandler(serverConfig{
-		SiteRoot:         options.siteRoot,
-		PublicRoot:       options.publicRoot,
-		MediaRoot:        options.mediaRoot,
-		ContributionsDir: options.contributionsDir,
-		GenerationToken:  options.generationToken,
-		ServerToken:      options.serverToken,
-	}, logger)
+		SiteRoot:        options.siteRoot,
+		PublicRoot:      options.publicRoot,
+		MediaRoot:       options.mediaRoot,
+		GenerationToken: options.generationToken,
+		ServerToken:     options.serverToken,
+	})
 	if err != nil {
 		return err
 	}
@@ -342,7 +310,6 @@ func run(arguments []string) error {
 		"site_root", filepath.Clean(options.siteRoot),
 		"public_root", filepath.Clean(options.publicRoot),
 		"media_root", filepath.Clean(options.mediaRoot),
-		"contributions_dir", filepath.Clean(options.contributionsDir),
 		"generation", options.generationToken,
 		"server", options.serverToken,
 	)

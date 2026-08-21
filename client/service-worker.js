@@ -20,16 +20,14 @@ let readerWarmPromise = null;
 // group, but cannot choose which URLs the worker fetches.
 const PRECACHE_URLS = /* __GALATA_PRECACHE_URLS__ */ [];
 const READER_WARM_URLS = /* __GALATA_READER_WARM_URLS__ */ [];
-const CONTRIBUTION_URLS = /* __GALATA_CONTRIBUTION_URLS__ */ [];
 const STATIC_PATHS = new Set(
-  [...PRECACHE_URLS, ...READER_WARM_URLS, ...CONTRIBUTION_URLS]
+  [...PRECACHE_URLS, ...READER_WARM_URLS]
     .map((url) => new URL(url, self.location.origin).pathname),
 );
 
 const networkOnlyPaths = [
   /^\/healthz$/,
   /^\/audio\//,
-  /^\/uploads\//,
   /^\/magazines\/sayi\d+\/audio\//,
   /^\/images\/sayi\d+\//,
 ];
@@ -37,10 +35,6 @@ const networkOnlyPaths = [
 const networkFirstPaths = [
   /^\/magazines\/?$/,
   /^\/magazines\/\d+\/(?:pages|seo)\/?$/,
-];
-
-const cacheableCrossOriginURLs = [
-  /^https:\/\/cdnjs\.cloudflare\.com\//,
 ];
 
 function isCacheableResponse(response) {
@@ -249,12 +243,7 @@ self.addEventListener('fetch', (event) => {
 
   const requestURL = new URL(request.url);
   const isSameOrigin = requestURL.origin === self.location.origin;
-  if (!isSameOrigin) {
-    if (cacheableCrossOriginURLs.some((pattern) => pattern.test(request.url))) {
-      event.respondWith(cacheFirst(request));
-    }
-    return;
-  }
+  if (!isSameOrigin) return;
 
   const { pathname } = requestURL;
   if (networkOnlyPaths.some((pattern) => pattern.test(pathname))) return;

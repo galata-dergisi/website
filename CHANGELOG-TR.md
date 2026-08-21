@@ -9,5 +9,3 @@ Bu sürümde dergiyi okuma, kayıtları dinleme ve katkıları keşfetme deneyim
 | [Bir dergi sayısı](https://galatadergisi.org/dergiler/sayi44) | Yeni sayfa çevirme deneyimi, daha anlaşılır yüklenme/hata durumları ve düzgün çalışan Geri–İleri gezinmesi eklendi. Ön ve arka kapaklar da artık kendi sayfalarında ortalanıyor. |
 | [Ses Makinesi](https://galatadergisi.org/dergiler/sayi44/44) | Oynatıcı yenilendi: kayıtlar arasında geçiş, ilerleme ve ses denetimleri iyileştirildi; kesilen veya takılan kayıtlar için yeniden deneme davranışı eklendi. |
 | [Katkıda bulunan profili](https://galatadergisi.org/katkida-bulunanlar/9-semih-bozkurt) | Yazılı, görsel, kapak ve sesli katkılar ayrı başlıklarda; sayıları ve kapsadıkları dergi aralığıyla gösteriliyor. Uzun listelerde arama yapılabiliyor. |
-| [Katkıda bulunma formu](https://galatadergisi.org/katkida-bulunun) | İçerik ve dosya seçimi, doğrulama mesajları ve klavye kullanımı daha açık ve erişilebilir hâle getirildi. |
-

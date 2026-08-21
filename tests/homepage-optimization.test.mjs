@@ -79,7 +79,6 @@ test('homepage markup uses optimized image sources and the unified application b
   );
   assert.match(home, /srcset="\/images\/homepage-covers\/sayi47-100\.[a-f0-9]{16}\.avif 100w, \/images\/homepage-covers\/sayi47-180\.[a-f0-9]{16}\.avif 180w"/);
   assert.match(home, /<img src="\/images\/sayi47\/thumbnail\.jpg"/);
-  assert.doesNotMatch(home, /\/katkida-bulunun\/bundle\./);
   for (const document_ of [home, directReader]) {
     assert.equal(document_.includes(shell.assets['/bundle.js'].url), true);
     assert.equal(document_.includes(shell.assets['/bundle.css'].url), true);
@@ -124,13 +123,9 @@ test('reader cache warming skips offline and explicitly constrained connections'
   assert.equal(shouldWarmReaderCache({ connection: { effectiveType: '3g' }}), true);
 });
 
-test('analytics, hosted fonts, and eager contribution registration are absent', () => {
+test('analytics, hosted fonts, and eager service-worker registration are absent', () => {
   const homepageTemplate = fs.readFileSync(
     path.join(projectRoot, 'client/pages/homepage/index.html'),
-    'utf8',
-  );
-  const contributionTemplate = fs.readFileSync(
-    path.join(projectRoot, 'client/pages/contribute/katkida-bulunun.html'),
     'utf8',
   );
   const homepageEntry = fs.readFileSync(
@@ -138,10 +133,9 @@ test('analytics, hosted fonts, and eager contribution registration are absent', 
     'utf8',
   );
   assert.doesNotMatch(
-    `${homepageTemplate}\n${contributionTemplate}`,
+    homepageTemplate,
     /googletag|google-analytics|fonts\.googleapis/i,
   );
-  assert.doesNotMatch(contributionTemplate, /serviceWorker\.register/);
   assert.match(homepageEntry, /window\.addEventListener\('load'/);
   assert.match(homepageEntry, /requestIdleCallback\(warm, \{ timeout: 10_000 \}\)/);
   assert.match(homepageEntry, /READER_CACHE_WARM_GRACE_MS/);

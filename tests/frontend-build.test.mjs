@@ -17,9 +17,6 @@ test('Vite preserves the browser, SSR, and copied-asset contracts', () => {
   const requiredFiles = [
     'public/bundle.js',
     'public/bundle.css',
-    'public/katkida-bulunun/bundle.js',
-    'public/katkida-bulunun/bundle.css',
-    'public/katkida-bulunun/index.html',
     'public/index.html',
     'public/global.css',
     'public/service-worker.js',
@@ -33,16 +30,12 @@ test('Vite preserves the browser, SSR, and copied-asset contracts', () => {
   const homepageOutputs = fs.readdirSync(projectPath('public'))
     .filter((filename) => /\.(?:js|css|map)$/.test(filename))
     .sort();
-  const contributionOutputs = fs.readdirSync(projectPath('public/katkida-bulunun'))
-    .filter((filename) => /\.(?:js|css|map)$/.test(filename))
-    .sort();
   assert.deepEqual(homepageOutputs, [
     'bundle.css',
     'bundle.js',
     'global.css',
     'service-worker.js',
   ]);
-  assert.deepEqual(contributionOutputs, ['bundle.css', 'bundle.js']);
 
   const browserManifest = JSON.parse(
     fs.readFileSync(projectPath('public/.vite/manifest.json'), 'utf8'),
@@ -59,10 +52,6 @@ test('Vite preserves the browser, SSR, and copied-asset contracts', () => {
   const copiedFiles = [
     ['client/fonts/akaDora.woff2', 'public/fonts/akaDora.woff2'],
     ['client/pages/homepage/index.html', 'public/index.html'],
-    [
-      'client/pages/contribute/katkida-bulunun.html',
-      'public/katkida-bulunun/index.html',
-    ],
   ];
   for (const [source, output] of copiedFiles) {
     assert.deepEqual(fs.readFileSync(projectPath(output)), fs.readFileSync(projectPath(source)));

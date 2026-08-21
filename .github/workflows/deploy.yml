@@ -87,10 +87,7 @@ jobs:
 
       - name: Smoke-test deployable Linux release
         env:
-          CONTRIBUTIONS_DIR: ${{ runner.temp }}/galata-contributions
           LISTEN_ADDR: 127.0.0.1:3000
-          TURNSTILE_ALLOWED_HOSTNAMES: example.invalid
-          TURNSTILE_SECRET_KEY: deployment-artifact-smoke-test
         run: |
           set -euo pipefail
           release/galata-server-linux-amd64 > "$RUNNER_TEMP/galata-server.log" 2>&1 &

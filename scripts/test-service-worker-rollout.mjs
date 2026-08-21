@@ -44,8 +44,6 @@ const directShellPaths = new Set([
   '/bundle.js',
   '/global.css',
   '/legacy-player.js',
-  '/katkida-bulunun/bundle.css',
-  '/katkida-bulunun/bundle.js',
   '/images/favicon.png',
 ]);
 
@@ -122,7 +120,6 @@ async function collectDocumentMismatches(worker, pathname, scenario) {
 
 async function legacySession({
   cachedDocument = null,
-  visitedContribution = false,
 } = {}) {
   const storage = new FakeCacheStorage({ origin, networkFetch: legacyNetwork });
   const worker = new ServiceWorkerHarness(legacyWorkerSource, {
@@ -140,19 +137,6 @@ async function legacySession({
       responseForRelease(cachedDocument, 'main', 'text/html; charset=utf-8'),
     );
   }
-  if (visitedContribution) {
-    for (const pathname of [
-      '/katkida-bulunun/bundle.css',
-      '/katkida-bulunun/bundle.js',
-    ]) {
-      await storage.seed(
-        legacyCacheName,
-        pathname,
-        responseForRelease(`main:${pathname}`, 'main'),
-      );
-    }
-  }
-
   storage.setNetworkFetch(devNetwork());
   return { storage, worker };
 }
@@ -175,15 +159,6 @@ const lifecycleFailures = [];
     worker,
     '/dergiler/sayi47/10',
     'legacy worker with uncached reader deep link',
-  ));
-}
-
-{
-  const { worker } = await legacySession({ visitedContribution: true });
-  mismatches.push(...await collectDocumentMismatches(
-    worker,
-    '/katkida-bulunun',
-    'legacy worker with previously visited contribution form',
   ));
 }
 

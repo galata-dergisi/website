@@ -191,42 +191,14 @@ assert_file_contains "$temporary_dir/audio-unsatisfiable.headers" \
   "Content-Range: bytes */$audio_size" \
   "nginx unsatisfiable Content-Range is incorrect"
 
-post_submission() {
-  honeypot=$1
-  token=$2
-  curl --silent --show-error --insecure --max-time 10 \
-    --output "$temporary_dir/submission.json" \
-    --write-out '%{http_code}' \
-    --form-string 'name=Production Preview' \
-    --form-string 'email=preview@example.invalid' \
-    --form-string 'title=Production preview contract' \
-    --form-string 'assetType=video' \
-    --form-string 'videoLink=https://video.example.invalid/watch' \
-    --form-string "contactWebsite=$honeypot" \
-    --form-string "cf-turnstile-response=$token" \
-    "$base_url/katkida-bulunun"
-}
+status=$(curl --silent --show-error --insecure --max-time 10 \
+  --output /dev/null --write-out '%{http_code}' \
+  "$base_url/katkida-bulunun")
+assert_status 404 "$status" "retired contribution page"
 
-status=$(post_submission '' '')
-assert_status 400 "$status" "missing Turnstile token response"
-assert_file_contains "$temporary_dir/submission.json" '"code":"captcha_required"' \
-  "missing Turnstile token contract"
-
-status=$(post_submission 'https://spam.example.invalid/' 'must-not-be-verified')
-assert_status 400 "$status" "honeypot response"
-assert_file_contains "$temporary_dir/submission.json" '"code":"captcha_invalid"' \
-  "honeypot rejection contract"
-
-status=$(post_submission '' '')
-assert_status 400 "$status" "third contribution request"
-status=$(post_submission '' '')
-assert_status 400 "$status" "fourth contribution request"
-status=$(post_submission '' '')
-assert_status 400 "$status" "fifth contribution request"
-status=$(post_submission '' '')
-assert_status 429 "$status" "sixth contribution request"
-assert_file_contains "$temporary_dir/submission.json" \
-  '"code":"submission_throttled"' \
-  "nginx contribution throttle contract"
+status=$(curl --silent --show-error --insecure --max-time 10 \
+  --request POST --output /dev/null --write-out '%{http_code}' \
+  "$base_url/katkida-bulunun")
+assert_status 405 "$status" "retired contribution endpoint"
 
 echo "Production preview smoke test passed at $base_url."

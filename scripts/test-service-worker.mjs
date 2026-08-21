@@ -113,7 +113,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   Object.keys(firstBuild.assetManifest.groups).sort(),
-  ['contribution', 'homepage', 'reader'],
+  ['homepage', 'reader'],
   'release assets must use explicit phase groups',
 );
 assert.ok(
@@ -180,10 +180,7 @@ assert.deepEqual(
   firstBuild.precacheURLs.slice().sort(),
   'install must cache only the exact current shell URLs',
 );
-for (const url of [
-  ...firstBuild.readerWarmURLs,
-  ...firstBuild.contributionURLs,
-]) {
+for (const url of firstBuild.readerWarmURLs) {
   assert.equal(
     await staticCache.match(makeRequest(url)),
     undefined,
@@ -282,22 +279,6 @@ assert.equal(
   'reader warming and concurrent reader use must share one cache-first network request',
 );
 
-const contributionURL = firstBuild.contributionURLs[0];
-let contributionFetches = 0;
-storage.setNetworkFetch(async () => {
-  contributionFetches += 1;
-  return new Response('contribution', { status: 200 });
-});
-assert.equal(
-  await (await worker.dispatchFetch(makeRequest(contributionURL)).response()).text(),
-  'contribution',
-);
-assert.equal(
-  await (await worker.dispatchFetch(makeRequest(contributionURL)).response()).text(),
-  'contribution',
-);
-assert.equal(contributionFetches, 1, 'contribution assets must cache only after their first visit');
-
 await worker.activate();
 assert.ok(worker.clientsClaimed, 'activated service worker must claim existing clients');
 assert.ok(
@@ -310,14 +291,13 @@ assert.ok(
 );
 
 for (const request of [
-  makeRequest('/katkida-bulunun', { method: 'POST' }),
+  makeRequest('/', { method: 'POST' }),
   makeRequest('/magazines/sayi6/audio/1.mp3'),
   makeRequest('/images/sayi47/thumbnail.jpg'),
   makeRequest('/images/sayi47/front.jpg'),
   makeRequest('/healthz'),
   makeRequest('/bundle.js', { range: 'bytes=0-99' }),
   makeRequest('https://www.googletagmanager.com/gtag/js?id=test'),
-  makeRequest('https://challenges.cloudflare.com/turnstile/v0/api.js'),
 ]) {
   const event = worker.dispatchFetch(request);
   assert.equal(event.wasIntercepted(), false, `must bypass service worker: ${request.url}`);
@@ -345,19 +325,6 @@ assert.equal(
   'carousel placeholder sprite must come from the static shell cache',
 );
 assert.equal(fetchCount, 0, 'pre-cached placeholder sprite must not hit the network');
-
-const cdnRequest = makeRequest(
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css',
-);
-const firstCDNEvent = worker.dispatchFetch(cdnRequest);
-assert.equal((await firstCDNEvent.response()).status, 200);
-assert.equal(fetchCount, 1, 'allowlisted static CDN dependency must use the network once');
-
-storage.setNetworkFetch(async () => {
-  throw new Error('offline');
-});
-const cachedCDNEvent = worker.dispatchFetch(cdnRequest);
-assert.equal((await cachedCDNEvent.response()).status, 200);
 
 const magazinesRequest = makeRequest('/magazines');
 storage.setNetworkFetch(async () => new Response('{"success":true}', {

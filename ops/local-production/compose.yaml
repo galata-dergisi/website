@@ -7,16 +7,8 @@ services:
       dockerfile: ops/zap/Dockerfile
       target: scan-target
     environment:
-      CONTRIBUTIONS_DIR: /var/lib/galata-contributions
-      EXTERNAL_MEDIA_DIR: /var/www/galatadergisi.org/public
       LISTEN_ADDR: 127.0.0.1:3000
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-local-production-placeholder}
-      TURNSTILE_ALLOWED_HOSTNAMES: galatadergisi.org,www.galatadergisi.org
     read_only: true
-    volumes:
-      - type: volume
-        source: contributions
-        target: /var/lib/galata-contributions
     ports:
       - "127.0.0.1:${GALATA_PREVIEW_HTTPS_PORT:-44443}:443"
     cap_drop:
@@ -47,6 +39,3 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 10s
-
-volumes:
-  contributions:

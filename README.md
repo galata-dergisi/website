@@ -13,10 +13,9 @@ The production design is documented in the
 [immutable-site architecture](docs/immutable-site-architecture.md) and
 [operations runbook](docs/immutable-site-operations.md). Node and Svelte are
 build-only tools; the production application is a standard-library Go server
-with a private atomic filesystem inbox for new contributions.
+serving an immutable embedded site.
 
-For a watched local frontend, generated site, Go server, local media, and
-private development inbox, see the
+For a watched local frontend, generated site, Go server, and local media, see the
 [full-stack development guide](docs/development.md) and run `npm run dev`.
 
 ## Contributing to galata-dergisi

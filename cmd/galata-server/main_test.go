@@ -78,41 +78,6 @@ func TestProductionEnvironmentFileExplicitPath(t *testing.T) {
 	}
 }
 
-func TestRequiredEnvironmentRejectsBlankValues(t *testing.T) {
-	const key = "GALATA_REQUIRED_ENV_TEST"
-	t.Setenv(key, "  ")
-	if _, err := requiredEnvironment(key); err == nil {
-		t.Fatal("blank required environment must fail")
-	}
-	t.Setenv(key, " value ")
-	value, err := requiredEnvironment(key)
-	if err != nil || value != "value" {
-		t.Fatalf("value=%q err=%v", value, err)
-	}
-}
-
-func TestParseAllowedHostnames(t *testing.T) {
-	hostnames, err := parseAllowedHostnames("galatadergisi.org, www.galatadergisi.org")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(hostnames, ",") != "galatadergisi.org,www.galatadergisi.org" {
-		t.Fatalf("hostnames=%q", hostnames)
-	}
-
-	invalid := []string{
-		"", "*", "*.galatadergisi.org", "DEV.galatadergisi.org",
-		"dev.galatadergisi.org,dev.galatadergisi.org", ".galatadergisi.org",
-		"dev.galatadergisi.org.", "-dev.galatadergisi.org", "dev_.galatadergisi.org",
-		"dev.galatadergisi.org,,galatadergisi.org",
-	}
-	for _, value := range invalid {
-		if _, err := parseAllowedHostnames(value); err == nil {
-			t.Errorf("parseAllowedHostnames(%q) unexpectedly succeeded", value)
-		}
-	}
-}
-
 func unsetEnvironmentForTest(t *testing.T, key string) {
 	t.Helper()
 	original, existed := os.LookupEnv(key)
@@ -128,26 +93,14 @@ func unsetEnvironmentForTest(t *testing.T, key string) {
 	})
 }
 
-func TestProductionApplicationRoutesHealthSiteAndContributions(t *testing.T) {
+func TestProductionApplicationRoutesHealthAndSite(t *testing.T) {
 	staticSite, err := site.NewEmbedded()
 	if err != nil {
 		t.Fatal(err)
 	}
-	contributionCalls := 0
-	contributionHandler := http.HandlerFunc(func(
-		writer http.ResponseWriter,
-		request *http.Request,
-	) {
-		contributionCalls++
-		if request.Method != http.MethodPost {
-			t.Fatalf("contribution method=%q", request.Method)
-		}
-		writer.WriteHeader(http.StatusCreated)
-	})
 	handler, err := application.New(application.Config{
-		Site:          staticSite,
-		SiteRelease:   staticSite.Release(),
-		Contributions: contributionHandler,
+		Site:        staticSite,
+		SiteRelease: staticSite.Release(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -175,17 +128,21 @@ func TestProductionApplicationRoutesHealthSiteAndContributions(t *testing.T) {
 		t.Fatalf("homepage status=%d bytes=%d", homepage.Code, homepage.Body.Len())
 	}
 
-	contribution := httptest.NewRecorder()
+	retiredPage := httptest.NewRecorder()
 	handler.ServeHTTP(
-		contribution,
+		retiredPage,
+		httptest.NewRequest(http.MethodGet, "/katkida-bulunun", nil),
+	)
+	if retiredPage.Code != http.StatusNotFound {
+		t.Fatalf("retired page status=%d", retiredPage.Code)
+	}
+	retiredPost := httptest.NewRecorder()
+	handler.ServeHTTP(
+		retiredPost,
 		httptest.NewRequest(http.MethodPost, "/katkida-bulunun", nil),
 	)
-	if contribution.Code != http.StatusCreated || contributionCalls != 1 {
-		t.Fatalf(
-			"contribution status=%d calls=%d",
-			contribution.Code,
-			contributionCalls,
-		)
+	if retiredPost.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("retired POST status=%d", retiredPost.Code)
 	}
 
 	devStatus := httptest.NewRecorder()

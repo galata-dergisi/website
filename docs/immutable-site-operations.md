@@ -40,8 +40,6 @@ The harness runs the official OWASP ZAP baseline and bounded active scans on an
 isolated Docker network and writes HTML, JSON, and Markdown results to the
 ignored `zap-reports/` directory. The baseline performs passive analysis only;
 the explicit active command sends attack payloads to the containerized target.
-Both commands first verify the missing-Turnstile-token and filled-honeypot
-rejection contracts without making a third-party request.
 See [`ops/zap/README.md`](../ops/zap/README.md) for rule policy, scope, and
 timeout overrides.
 
@@ -109,8 +107,8 @@ The resulting host has:
   `Europe/Istanbul`;
 - nginx and `cloudflared` installed, with no enabled virtual host, tunnel
   connector, or web listener;
-- a locked `galata` runtime account, private contribution directory, release
-  directories, and a hardened but disabled `galata-server.service`;
+- a locked `galata` runtime account, release directories, and a hardened but
+  disabled `galata-server.service`;
 - when Canonical supports USG on the host release, an initial CIS Level 1
   Server audit and a persistent weekly audit timer. The bootstrap warns and
   skips this audit when USG has not yet been published for a new Ubuntu LTS.
@@ -144,10 +142,8 @@ Run the interactive setup from the trusted workstation after Phase 1:
 ```
 
 `configure` proves the administrator connection and `sudo -n`, creates a
-dedicated Ed25519 key (default `~/.ssh/galata-deploy`), prompts without echoing
-for the shared Turnstile secret, and installs the two isolated runtimes. It
-refuses to overwrite an existing key pair. A rerun preserves the installed
-secret unless `--rotate-turnstile` is explicit. It also writes a verified
+dedicated Ed25519 key (default `~/.ssh/galata-deploy`), and installs the two
+isolated runtimes. It refuses to overwrite an existing key pair. It also writes a verified
 `known_hosts` file beside the key: the scan must match host keys read through
 the already trusted administrator session. It installs both nginx virtual hosts
 on the loopback-only `127.0.0.1:8080` listener and installs the disabled,
@@ -164,7 +160,7 @@ published application routes:
 
 Protect `dev.galatadergisi.org` with a public-hostname Cloudflare Access
 application. Leave its path empty so the policy covers the complete site,
-including `/healthz`, media, and contribution routes. Add an Allow policy that
+including `/healthz` and media. Add an Allow policy that
 includes exact email addresses, an approved identity-provider group, or another
 deliberately bounded identity selector. Do not use `Include: Everyone` or use a
 login method such as One-time PIN as the only Include selector. Select the
@@ -196,15 +192,15 @@ never appears in a command line. Neither interactive setup command is suitable
 for GitHub Actions.
 
 The restricted `galata-deploy` account is not an administrator. Its SSH key has
-OpenSSH `restrict`, it cannot read `/etc/galata`, the tunnel token, or either
-contribution inbox, and sudo accepts only the root-owned deployment helper.
+OpenSSH `restrict`, it cannot read `/etc/galata` or the tunnel token, and sudo
+accepts only the root-owned deployment helper.
 Uploads land under `/var/lib/galata-deploy`; the helper alone can install
 root-owned releases, change symlinks, or manage services.
 
-| Slot | Host | Service/port | Code link | Contribution state |
-| --- | --- | --- | --- | --- |
-| production | apex and `www` | `galata-server.service`, `127.0.0.1:3000` | `/opt/galata/current` | `/var/lib/galata-contributions` |
-| dev | `dev.galatadergisi.org` | `galata-dev-server.service`, `127.0.0.1:3001` | `/opt/galata/current-dev` | `/var/lib/galata-dev-contributions` |
+| Slot | Host | Service/port | Code link |
+| --- | --- | --- | --- |
+| production | apex and `www` | `galata-server.service`, `127.0.0.1:3000` | `/opt/galata/current` |
+| dev | `dev.galatadergisi.org` | `galata-dev-server.service`, `127.0.0.1:3001` | `/opt/galata/current-dev` |
 
 Both slots may select the same immutable release, but changing one does not
 restart or relink the other. Cloudflare Access authenticates dev at the edge,
@@ -258,100 +254,44 @@ PRIVATE_CONTENT_ARCHIVE=/protected/path/galata_dergisi.sqlite \
 install or activate them. Deployment consumes this output and never builds
 source on the VPS.
 
-The tunnel client-address mapping, upstreams, and independent rate-limit zones
-are in `ops/nginx/galata-shared.conf`; production and dev server blocks are
-tracked separately. Phase 2 installs them and validates the complete host with
-`nginx -t` before reloading. The tracked configuration sends application routes,
-including browser bundles and generated documents, to the immutable Go
-server. Nginx serves only the external `/images/sayiN/` media tree and the
-public `/magazines/sayiN/audio/file` mapping from
-`/var/www/galatadergisi.org/public/`.
-
-The tracked virtual host limits only the exact `POST /katkida-bulunun` route.
-It accepts five immediate requests per client, then replenishes at one request
-per minute, and permits one in-flight contribution upload per client. Rejected
-rate or connection limits are logged at notice level and return HTTP `429`
-with `Retry-After: 60` and this JSON contract:
-
-```json
-{"ok":false,"code":"submission_throttled","message":"Çok fazla gönderi işleniyor. Lütfen bir dakika sonra tekrar deneyin."}
-```
-
-All other methods and routes use an empty limiter key and are excluded from
-request and connection accounting. Limiting is active immediately; the
-configuration does not use nginx dry-run mode. These are origin controls; no
-Cloudflare dashboard rate-limiting rule is required or assumed.
+The production and dev Go upstreams are declared in
+`ops/nginx/galata-shared.conf`; their server blocks are tracked separately.
+Phase 2 installs them and validates the complete host with `nginx -t` before
+reloading. Application routes, browser bundles, and generated documents go to
+the immutable Go server. Nginx serves only the external `/images/sayiN/` media
+tree and `/magazines/sayiN/audio/file` mapping from the slot's published media
+snapshot.
 
 Nginx accepts web traffic only at `127.0.0.1:8080`, and the dashboard-managed
-tunnel is the only public route to that listener. Tunneled requests use
-`CF-Connecting-IP` as the limiter key; headerless local activation probes fall
-back to `$remote_addr`. Dev has no origin `auth_basic` configuration: Cloudflare
-Access enforces identity before the request enters the tunnel, and **Protect
-with Access** validates its application token at the connector. Local activation
-probes remain independent of edge authentication. Never publish another route
-to the dev origin or reload until the complete installed configuration passes
-`nginx -t`.
-
-The limiter address exists only transiently in nginx's shared-memory zones.
-The configuration does not rewrite `$remote_addr`, so access-log identity is
-unchanged, and it strips visitor-address headers before proxying to Go. Client
-addresses are not sent to Turnstile or written to contribution metadata or
-application state.
+tunnel is the only public route to that listener. Dev has no origin
+`auth_basic` configuration: Cloudflare Access enforces identity before the
+request enters the tunnel, and **Protect with Access** validates its application
+token at the connector. Local activation probes remain independent of edge
+authentication. Visitor-address headers are stripped before proxying to Go.
 
 ## Runtime configuration
 
-Create a dedicated contribution location outside the application, reverse
-proxy document root, media tree, and backup staging area:
+The process requires only the slot-specific loopback address:
 
-```sh
-install -d -m 0700 /var/lib/galata-contributions
+```text
+LISTEN_ADDR=127.0.0.1:3000
 ```
 
-The process requires:
-
-- `CONTRIBUTIONS_DIR=/var/lib/galata-contributions`
-- `TURNSTILE_SECRET_KEY` from protected service configuration
-- `TURNSTILE_ALLOWED_HOSTNAMES=galatadergisi.org,www.galatadergisi.org` in
-  production, or `dev.galatadergisi.org` in dev
-- `EXTERNAL_MEDIA_DIR=/var/www/galatadergisi.org/public`, which makes startup
-  reject a contribution root that overlaps the reverse-proxy media tree
-- `LISTEN_ADDR=127.0.0.1:3000` when using the tracked nginx configuration
-
-The server optionally loads `.env.production` from its working directory before
-validating these values. To keep configuration elsewhere, pass an explicit
-path:
+The server optionally loads `.env.production` from its working directory. To
+keep configuration elsewhere, pass an explicit path:
 
 ```sh
 galata-server --env-file /etc/galata/production.env
 ```
 
 A missing default file is allowed because a service manager may provide the
-complete environment. A missing explicitly requested file, malformed file, or
-blank required value stops startup. Inherited environment values override the
-file. Start from the tracked `.env.example`, replace its safe local paths for
-the deployed host, set the real Turnstile secret, and restrict the production
-copy to the service account (for example, mode `0600`). Env files are read only
-at startup and are never embedded in builds or release artifacts.
+environment. A missing explicitly requested file or malformed file stops
+startup. Inherited environment values override the file. Env files are read
+only at startup and are never embedded in builds or release artifacts.
 
 `LISTEN_ADDR` defaults to `0.0.0.0:3000`, but the production reverse-proxy
-setup must use the explicit loopback address above so the application port is
-not exposed directly.
-
-The allowed-hostnames value is mandatory. Empty entries, wildcards, uppercase
-or malformed names, and duplicates stop startup. It is deliberately distinct
-between slots even though both use the same Turnstile widget and secret.
-
-The server creates `.staging/` and `inbox/` with mode `0700`, removes stale
-staging directories older than 24 hours at startup, and writes files with mode
-`0600`. Back up the entire contribution root with a tool that preserves modes,
-ownership, and directory renames.
-
-Production sets the Go contribution handler's global non-blocking concurrency
-cap to eight. Saturation is rejected before the request body is read and uses
-the same `429`, `Retry-After`, code, and Turkish message as nginx. Development
-leaves the cap at zero (unlimited). The form also posts an empty, hidden
-`contactWebsite` honeypot; a filled value creates no inbox data and returns the
-existing generic `400 captcha_invalid` response without contacting Turnstile.
+setup must use an explicit loopback address so the application port is not
+exposed directly.
 
 ## Deploying and rolling back
 
@@ -384,7 +324,7 @@ For dev, `verify --public` first verifies the active release through the
 restricted origin connection, then requires the unauthenticated public
 `/healthz` request to redirect to Cloudflare Access. It deliberately does not
 impersonate a user or store an Access service token. Complete the authenticated
-route and contribution checks in a browser with an allowed identity.
+route checks in a browser with an allowed identity.
 
 Explicit rollback defaults to the immediately previous retained deployment:
 
@@ -393,8 +333,7 @@ Explicit rollback defaults to the immediately previous retained deployment:
 ./ops/deploy-server.sh rollback production <release-id>
 ```
 
-Five records are retained per slot. Contribution directories are never part of
-release activation or rollback.
+Five records are retained per slot.
 
 The manual `Deploy immutable release` GitHub workflow accepts `dev` or
 `production` and rejects dispatches outside `main`. It finds the successful
@@ -413,24 +352,21 @@ Configure only:
 - `STATIC_ASSETS_TOKEN` (fine-grained, read-only, and limited to
   `galata-dergisi/static-assets`)
 
-GitHub never receives the Cloudflare Tunnel token, Turnstile secret, Access
-identity, or Access session token.
+GitHub never receives the Cloudflare Tunnel token, Access identity, or Access
+session token.
 
 ## Dev acceptance and production cutover
 
 After the three dashboard routes are saved, the dev route has **Protect with
 Access** enabled, and `tunnel-setup` reports an active connector, deploy and run
 `verify dev --public`. Sign in with an allowed identity, then test site routes,
-external image/audio range requests, and a complete dev contribution; confirm
-that the contribution exists only in the dev inbox. Repeat from a private
-browser session with a disallowed identity and confirm that Access denies it.
-Keep `galatadergisi.org` authorized on the Turnstile widget; Cloudflare's apex
-authorization covers its subdomains, while the server-side environment still
-requires the exact dev hostname.
+external image/audio range requests, and service-worker updates. Repeat from a
+private browser session with a disallowed identity and confirm that Access
+denies it.
 
 After an independently approved production deployment, run
 `verify production --public`, purge relevant Cloudflare cache, and monitor
-nginx, `cloudflared`, application health, errors, and contribution creation.
+nginx, `cloudflared`, application health, and errors.
 The deployment scripts never create or alter the remotely managed tunnel,
 published application routes, or Cloudflare edge TLS configuration.
 
@@ -444,12 +380,6 @@ Before selecting a release:
    contributor canonical redirects, JSON aliases, gzip, `HEAD`, and ETag/304.
 3. Verify external image and audio URLs through the reverse proxy, including
    an audio range request.
-4. Submit one test contribution, verify its complete directory and hash under
-   `inbox/`, and move that directory to the private handled archive.
-5. After installing and validating nginx, smoke-test five rapid contribution
-   attempts from one client, verify that the sixth returns the documented
-   `429` response and header, hold one slow upload open and verify a concurrent
-   upload from the same client is rejected, and confirm normal site traffic is
-   unaffected.
-6. Stop the temporary process. Production deployment is a separate,
+4. Verify `/katkida-bulunun` returns `404` for `GET` and rejects `POST`.
+5. Stop the temporary process. Production deployment is a separate,
    explicitly authorized operation.

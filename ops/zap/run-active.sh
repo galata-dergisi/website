@@ -2,7 +2,7 @@
 set -eu
 
 target="${ZAP_TARGET:-http://app:3000}"
-active_target="${ZAP_ACTIVE_TARGET:-${target}/katkida-bulunun}"
+active_target="${ZAP_ACTIVE_TARGET:-${target}/}"
 spider_minutes="${ZAP_ACTIVE_SPIDER_MINUTES:-1}"
 timeout_minutes="${ZAP_ACTIVE_TIMEOUT_MINUTES:-10}"
 max_duration_minutes="${ZAP_ACTIVE_MAX_DURATION_MINUTES:-10}"
@@ -36,8 +36,6 @@ while ! curl --fail --silent --show-error --max-time 2 "${target}/healthz" >/dev
   attempt=$((attempt + 1))
   sleep 1
 done
-
-sh /zap/config/check-turnstile-contract.sh
 
 exec zap-full-scan.py \
   -t "$active_target" \

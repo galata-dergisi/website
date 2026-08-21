@@ -19,4 +19,4 @@ media, so builds never probe media or depend on `ffprobe`.
 
 A protected private-content archive may be supplied explicitly to the release
 scanner, but it is not part of this directory. It remains offline and must not
-be deployed, embedded, or used to populate the contribution inbox.
+be deployed or embedded.

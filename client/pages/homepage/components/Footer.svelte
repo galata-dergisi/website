@@ -44,8 +44,6 @@
   <!--googleoff: snippet-->
   İletişim:
   <a href="mailto:bilgi@galatadergisi.org">bilgi@galatadergisi.org</a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  İçerik göndererek katkıda bulunmak için <a href="/katkida-bulunun">tıklayın</a>.
   <br />
   Web sitesinin kodları bir özgür yazılım lisansı olan
     <a

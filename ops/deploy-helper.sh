@@ -26,7 +26,6 @@ slot_values() {
     ENV_FILE=/etc/galata/production.env
     CURRENT_LINK=/opt/galata/current
     MEDIA_LINK=/var/www/galatadergisi.org/public
-    CONTRIBUTIONS=/var/lib/galata-contributions
     PORT=3000
     CANDIDATE_PORT=39000
     HOSTNAME=galatadergisi.org
@@ -36,7 +35,6 @@ slot_values() {
     ENV_FILE=/etc/galata/dev.env
     CURRENT_LINK=/opt/galata/current-dev
     MEDIA_LINK=/var/www/dev.galatadergisi.org/public
-    CONTRIBUTIONS=/var/lib/galata-dev-contributions
     PORT=3001
     CANDIDATE_PORT=39001
     HOSTNAME=dev.galatadergisi.org
@@ -168,7 +166,6 @@ candidate_check() {
     --property=LockPersonality=yes --property=MemoryDenyWriteExecute=yes \
     --property=SystemCallArchitectures=native \
     --property='RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' \
-    --property="ReadWritePaths=$CONTRIBUTIONS" \
     /usr/bin/env "LISTEN_ADDR=127.0.0.1:$CANDIDATE_PORT" "$binary"
   if ! health_release "$CANDIDATE_PORT" "$expected"; then
     systemctl stop "$unit.service" >/dev/null 2>&1 || true
@@ -302,8 +299,6 @@ configure() {
   install -d -m 0755 -o root -g root "$DEPLOY_ROOT/history"
   install -d -m 0700 -o root -g root "$PROCESS_ROOT"
   install -d -m 0750 -o root -g www-data /var/www/galatadergisi.org /var/www/dev.galatadergisi.org
-  install -d -m 0700 -o galata -g galata /var/lib/galata-contributions
-  install -d -m 0700 -o galata-dev -g galata-dev /var/lib/galata-dev-contributions
   install -d -m 0755 -o root -g root /etc/nginx/sites-available \
     /var/log/nginx/galatadergisi.org /var/log/nginx/dev.galatadergisi.org
   install -m 0600 -o root -g root "$bundle/production.env" /etc/galata/production.env
@@ -324,10 +319,8 @@ configure() {
     /etc/systemd/system/cloudflared.service >/dev/null
   nginx -t >/dev/null
   systemctl reload nginx.service
-  runuser -u galata-deploy -- test ! -r /etc/galata/production.env || die "deploy user can read runtime secrets"
+  runuser -u galata-deploy -- test ! -r /etc/galata/production.env || die "deploy user can read runtime configuration"
   runuser -u galata-deploy -- test ! -r /etc/cloudflared/tunnel-token || die "deploy user can read the tunnel token"
-  runuser -u galata-deploy -- test ! -r /var/lib/galata-contributions || die "deploy user can read production contributions"
-  runuser -u galata-deploy -- test ! -r /var/lib/galata-dev-contributions || die "deploy user can read dev contributions"
   runuser -u galata-deploy -- test -r /home/galata-deploy/.ssh/authorized_keys \
     || die "deploy user cannot read SSH authorization"
   runuser -u galata-deploy -- test ! -w /home/galata-deploy/.ssh/authorized_keys \
@@ -441,8 +434,6 @@ verify() {
   validate_published_media_permissions "$active_media"
   validate_media_inventory "$CODE_RELEASES/$release/MEDIA-SHA256SUMS" "$active_media"
   [ "$(stat -c '%U:%G %a' "$ENV_FILE")" = 'root:root 600' ] || die "$SLOT environment permissions are unsafe"
-  [ "$(stat -c '%U:%G %a' "$CONTRIBUTIONS")" = "$RUNTIME_USER:$RUNTIME_USER 700" ] \
-    || die "$SLOT contribution permissions are unsafe"
   systemctl is-enabled --quiet "$SERVICE" && systemctl is-active --quiet "$SERVICE" \
     || die "$SERVICE is not enabled and active"
   systemd-analyze verify "/etc/systemd/system/$SERVICE" >/dev/null
@@ -468,10 +459,8 @@ verify() {
     && systemctl is-active --quiet cloudflared.service \
     || die "cloudflared.service is not enabled and active"
   tunnel_connected || die "Cloudflare Tunnel has no active connections"
-  runuser -u galata-deploy -- test ! -r /etc/galata/production.env || die "deploy user can read runtime secrets"
+  runuser -u galata-deploy -- test ! -r /etc/galata/production.env || die "deploy user can read runtime configuration"
   runuser -u galata-deploy -- test ! -r /etc/cloudflared/tunnel-token || die "deploy user can read the tunnel token"
-  runuser -u galata-deploy -- test ! -r /var/lib/galata-contributions || die "deploy user can read production contributions"
-  runuser -u galata-deploy -- test ! -r /var/lib/galata-dev-contributions || die "deploy user can read dev contributions"
   runuser -u galata-deploy -- test ! -w /home/galata-deploy || die "deploy user can alter SSH authorization"
   note "$SLOT verified release=$release media=$(basename "$(readlink -f "$MEDIA_LINK")")"
 }

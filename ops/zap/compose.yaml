@@ -7,13 +7,8 @@ services:
       dockerfile: ops/zap/Dockerfile
       target: scan-target
     environment:
-      CONTRIBUTIONS_DIR: /var/lib/galata-contributions
       LISTEN_ADDR: 0.0.0.0:3000
-      TURNSTILE_SECRET_KEY: zap-scan-placeholder
-      TURNSTILE_ALLOWED_HOSTNAMES: galatadergisi.org,www.galatadergisi.org
     read_only: true
-    tmpfs:
-      - /var/lib/galata-contributions:mode=0700,uid=65532,gid=65532
     cap_drop:
       - ALL
     security_opt:
@@ -47,10 +42,6 @@ services:
         target: /zap/config/run-baseline.sh
         read_only: true
       - type: bind
-        source: ./check-turnstile-contract.sh
-        target: /zap/config/check-turnstile-contract.sh
-        read_only: true
-      - type: bind
         source: ../../zap-reports
         target: /zap/wrk
     working_dir: /zap/wrk
@@ -77,7 +68,7 @@ services:
       ZAP_ACTIVE_MAX_DURATION_MINUTES: ${ZAP_ACTIVE_MAX_DURATION_MINUTES:-10}
       ZAP_ACTIVE_MAX_RULE_DURATION_MINUTES: ${ZAP_ACTIVE_MAX_RULE_DURATION_MINUTES:-2}
       ZAP_ACTIVE_SPIDER_MINUTES: ${ZAP_ACTIVE_SPIDER_MINUTES:-1}
-      ZAP_ACTIVE_TARGET: ${ZAP_ACTIVE_TARGET:-http://app:3000/katkida-bulunun}
+      ZAP_ACTIVE_TARGET: ${ZAP_ACTIVE_TARGET:-http://app:3000/}
       ZAP_ACTIVE_TIMEOUT_MINUTES: ${ZAP_ACTIVE_TIMEOUT_MINUTES:-10}
       ZAP_TARGET: http://app:3000
     volumes:
@@ -88,10 +79,6 @@ services:
       - type: bind
         source: ./run-active.sh
         target: /zap/config/run-active.sh
-        read_only: true
-      - type: bind
-        source: ./check-turnstile-contract.sh
-        target: /zap/config/check-turnstile-contract.sh
         read_only: true
       - type: bind
         source: ../../zap-reports
