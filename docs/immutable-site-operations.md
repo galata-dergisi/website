@@ -56,6 +56,11 @@ route with audio interaction. Enforce the dev include first and repeat those
 checks. Only then enforce the production include and promote ZAP rule 10038 to
 `FAIL`. Do not add a report collector or public write endpoint.
 
+Executable historical catalog blocks and contributor profile behavior are
+served from tracked same-origin JS and CSS assets. The generator rejects new or
+changed inline catalog blocks until their replacement asset is explicitly
+reviewed; nginx CSP does not carry content hashes.
+
 To prove the complete browser/SSR/site build is deterministic, compare the
 sorted file-hash stream from two builds:
 

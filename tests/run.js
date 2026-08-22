@@ -2193,6 +2193,8 @@ test('keeps the local production preview on the production runtime boundary', ()
   assert.match(smokeSource, /assert_status 206/);
   assert.match(smokeSource, /Content-Type: audio\/mpeg/);
   assert.match(smokeSource, /report-only CSP header does not match/);
+  assert.match(smokeSource, /legacy video stylesheet is not externalized/);
+  assert.match(smokeSource, /contributor profile script is not externalized/);
   assert.match(smokeSource, /audio response lost centralized security headers/);
   assert.match(smokeSource, /retired contribution endpoint/);
   assert.match(smokeSource, /nginx emitted an access log record/);
@@ -3386,16 +3388,27 @@ test('renders canonical metadata and privacy-safe contributor sections', () => {
   assert(contrastRatio('#5f763d', '#ffffff') >= 4.5);
   assert(contrastRatio('#6b6b6b', '#ffffff') >= 4.5);
   assert(contrastRatio('#3f5226', '#eef2e8') >= 4.5);
-  assert.match(html, /--link-color: #5f763d; --meta-color: #6b6b6b/);
-  assert.match(html, /background: #d9d9d9/);
-  assert.doesNotMatch(html, /linear-gradient/);
-  assert.match(html, /\.profile-long \{ min-height: calc\(100vh - 80px\); \}/);
-  assert.match(html, /min-height: 44px/);
-  assert.match(
-    html,
-    /@media \(max-width: 600px\)[\s\S]*font-size: 14px; line-height: 1\.5;[\s\S]*\.contribution-meta \{ min-height: 44px; padding-bottom: 0; \}[\s\S]*\.contribution-issue \{ min-height: 44px; \}/,
+  const profileStyles = fs.readFileSync(
+    path.join(__dirname, '../client/pages/contributor/profile.css'),
+    'utf8',
   );
-  assert.doesNotMatch(html, /min-height: 760px|Lucida Console|#698145|#777/);
+  const profileScript = fs.readFileSync(
+    path.join(__dirname, '../client/pages/contributor/profile.js'),
+    'utf8',
+  );
+  assert.match(html, /href="\/assets\/contributor-profile\.css"/);
+  assert.doesNotMatch(html, /<style\b/);
+  assert.match(profileStyles, /--link-color: #5f763d;/);
+  assert.match(profileStyles, /--meta-color: #6b6b6b;/);
+  assert.match(profileStyles, /background: #d9d9d9/);
+  assert.doesNotMatch(profileStyles, /linear-gradient/);
+  assert.match(profileStyles, /\.profile-long \{[\s\S]*min-height: calc\(100vh - 80px\)/);
+  assert.match(profileStyles, /min-height: 44px/);
+  assert.match(
+    profileStyles,
+    /@media \(max-width: 600px\)[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.5;[\s\S]*\.contribution-meta \{[\s\S]*min-height: 44px;[\s\S]*padding-bottom: 0;[\s\S]*\.contribution-issue \{[\s\S]*min-height: 44px;/,
+  );
+  assert.doesNotMatch(profileStyles, /min-height: 760px|Lucida Console|#698145|#777/);
 
   const longProfile = {
     ...profile,
@@ -3471,8 +3484,13 @@ test('renders canonical metadata and privacy-safe contributor sections', () => {
     longMixedHtml,
     /id="yazili-katkilar"[\s\S]*id="gorsel-katkilar"[\s\S]*id="ses-makinesi"/,
   );
-  assert.match(longMixedHtml, /function enhanceProfileSearch\(\)/);
-  assert.match(longMixedHtml, /normalize\(row\.textContent\)/);
+  assert.match(
+    longMixedHtml,
+    /<script src="\/assets\/contributor-profile\.js" defer><\/script>/,
+  );
+  assert.doesNotMatch(longMixedHtml, /<script>(?:.|\n)*enhanceProfileSearch/);
+  assert.match(profileScript, /function enhanceProfileSearch\(\)/);
+  assert.match(profileScript, /normalize\(row\.textContent\)/);
   assert.match(longMixedHtml, /Eşleşen katkı bulunamadı\./);
   assert.match(longMixedHtml, /aria-live="polite"/);
   const flatSectionHtml = flatMixedHtml.slice(

@@ -26,6 +26,9 @@ const liveReloadBanner = [
 const copyTargets = [
   ['client/images', 'public/images'],
   ['client/fonts', 'public/fonts'],
+  ['client/legacy', 'public/assets/legacy'],
+  ['client/pages/contributor/profile.css', 'public/assets/contributor-profile.css'],
+  ['client/pages/contributor/profile.js', 'public/assets/contributor-profile.js'],
   ['client/pages/homepage/index.html', 'public/index.html'],
   ['client/pages/homepage/global.css', 'public/global.css'],
   ['client/service-worker.js', 'public/service-worker.js'],

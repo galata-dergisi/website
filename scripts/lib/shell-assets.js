@@ -18,6 +18,12 @@ const VERSION_LENGTH = 16;
 const MANIFEST_RELATIVE_PATH = 'build/shell-assets.json';
 
 const shellAssetEntries = [
+  ['/assets/contributor-profile.css', 'public/assets/contributor-profile.css'],
+  ['/assets/contributor-profile.js', 'public/assets/contributor-profile.js'],
+  ['/assets/legacy/sayi23-page21.css', 'public/assets/legacy/sayi23-page21.css'],
+  ['/assets/legacy/sayi45-page34.css', 'public/assets/legacy/sayi45-page34.css'],
+  ['/assets/legacy/sayi45-page34.js', 'public/assets/legacy/sayi45-page34.js'],
+  ['/assets/legacy/sayi46-page58.css', 'public/assets/legacy/sayi46-page58.css'],
   ['/bundle.css', 'public/bundle.css'],
   ['/bundle.js', 'public/bundle.js'],
   ['/global.css', 'public/global.css'],
@@ -32,6 +38,12 @@ const shellAssetEntries = [
 ];
 
 const textAssetPaths = new Set([
+  '/assets/contributor-profile.css',
+  '/assets/contributor-profile.js',
+  '/assets/legacy/sayi23-page21.css',
+  '/assets/legacy/sayi45-page34.css',
+  '/assets/legacy/sayi45-page34.js',
+  '/assets/legacy/sayi46-page58.css',
   '/bundle.css',
   '/bundle.js',
   '/global.css',

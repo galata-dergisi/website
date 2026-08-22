@@ -32,7 +32,9 @@ During the staged CSP rollout, rule 10038 remains informational because the
 deployed vhosts emit the exact independently verified report-only policy. It
 must be promoted to `FAIL` after production enforcement. Rule 10055 remains
 informational for the reviewed `style-src-attr 'unsafe-inline'` exception; the
-generated-site verifier enforces the complete policy and exact hashes.
+generated-site verifier enforces the complete policy, rejects executable inline
+blocks, and permits only the tracked same-origin assets extracted from reviewed
+legacy content.
 
 The shared scan hook excludes `/images/sayiN/` and
 `/magazines/sayiN/audio/` from both spidering and active attacks. Those payloads

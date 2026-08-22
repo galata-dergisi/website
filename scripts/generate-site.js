@@ -19,6 +19,7 @@ const {
   readHomepageImageManifest,
 } = require('./lib/homepage-images.js');
 const { readShellAssetManifest } = require('./lib/shell-assets.js');
+const { createLegacyInlineAssetTransformer } = require('./lib/legacy-inline-assets.js');
 const {
   DEVELOPMENT_RUNTIME_PATH,
   DEVELOPMENT_RUNTIME_SOURCE,
@@ -158,6 +159,9 @@ function main(arguments_ = process.argv.slice(2)) {
   const baseUrl = options.baseUrl;
   const development = options.mode === 'development';
   const assetManifest = development ? null : readShellAssetManifest(REPO_ROOT);
+  const legacyInlineAssets = createLegacyInlineAssetTransformer((pathname) => (
+    assetManifest ? assetManifest.assets[pathname].url : pathname
+  ));
   const homepageImages = readHomepageImageManifest(REPO_ROOT);
   const reader = openReadOnly(databasePath);
   let publicContent;
@@ -270,7 +274,16 @@ function main(arguments_ = process.argv.slice(2)) {
     .forEach((magazine) => {
       const issue = publicContent.getIssue(magazine.index);
       const preparedPages = publicContent.prepareIssuePages(magazine.index, issue.pages);
-      const { pages, audioPlayers } = preparedPages;
+      const pages = Object.fromEntries(Object.entries(preparedPages.pages).map(
+        ([pageNumber, html]) => [
+          pageNumber,
+          legacyInlineAssets.transform(
+            html,
+            `issue ${magazine.index} page ${pageNumber}`,
+          ),
+        ],
+      ));
+      const { audioPlayers } = preparedPages;
       const pageDataPath = `/magazines/${magazine.index}/pages`;
       addRoute(pageDataPath, stableJson({
         success: true,
@@ -379,6 +392,7 @@ function main(arguments_ = process.argv.slice(2)) {
     addRoute(canonical, renderer.renderProfile(profile), CONTENT_TYPES['.html']);
     redirects[`${canonical}/`] = canonical;
   });
+  legacyInlineAssets.assertComplete();
 
   addRoute('/sitemap.xml', renderSitemap(
     baseUrl,
@@ -408,6 +422,12 @@ function main(arguments_ = process.argv.slice(2)) {
   }
 
   const smallAssets = [
+    'assets/contributor-profile.css',
+    'assets/contributor-profile.js',
+    'assets/legacy/sayi23-page21.css',
+    'assets/legacy/sayi45-page34.css',
+    'assets/legacy/sayi45-page34.js',
+    'assets/legacy/sayi46-page58.css',
     'bundle.css',
     'bundle.js',
     'global.css',

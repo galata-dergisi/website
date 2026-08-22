@@ -2,6 +2,9 @@
 
 FROM nginx:stable-alpine
 
+ARG GALATA_PREVIEW_CSP_VARIANT=production
+ARG GALATA_PREVIEW_ENFORCE_CSP=0
+
 RUN apk add --no-cache openssl \
     && rm -f /etc/nginx/conf.d/default.conf \
     && mkdir -p \
@@ -13,11 +16,28 @@ RUN apk add --no-cache openssl \
 # the hostname and loopback HTTP listener, then adds preview-only TLS.
 COPY ops/nginx/galata-shared.conf /etc/nginx/conf.d/00-galata-shared.conf
 COPY ops/nginx/galata-security-headers.conf /etc/nginx/snippets/galata-security-headers.conf
-COPY ops/nginx/galata-production-csp.conf /etc/nginx/snippets/galata-production-csp.conf
+COPY ops/nginx/galata-production-csp.conf /usr/local/share/galata-production-csp.conf
+COPY ops/nginx/galata-dev-csp.conf /usr/local/share/galata-dev-csp.conf
 COPY ops/nginx/galatadergisi.org.conf /etc/nginx/conf.d/galatadergisi.org.conf
 COPY ops/local-production/preview-tls.conf /etc/nginx/snippets/galata-preview-tls.conf
 
-RUN sed -i \
+RUN case "$GALATA_PREVIEW_CSP_VARIANT" in \
+      production|dev) ;; \
+      *) echo "Unsupported CSP variant: $GALATA_PREVIEW_CSP_VARIANT" >&2; exit 2 ;; \
+    esac \
+    && case "$GALATA_PREVIEW_ENFORCE_CSP" in \
+      0|1) ;; \
+      *) echo "GALATA_PREVIEW_ENFORCE_CSP must be 0 or 1" >&2; exit 2 ;; \
+    esac \
+    && cp \
+        "/usr/local/share/galata-${GALATA_PREVIEW_CSP_VARIANT}-csp.conf" \
+        /etc/nginx/snippets/galata-production-csp.conf \
+    && if [ "$GALATA_PREVIEW_ENFORCE_CSP" = 1 ]; then \
+      sed -i \
+        's/add_header Content-Security-Policy-Report-Only /add_header Content-Security-Policy /' \
+        /etc/nginx/snippets/galata-production-csp.conf; \
+    fi \
+    && sed -i \
         -e '/^[[:space:]]*server_name /c\  server_name localhost;' \
         -e '/^[[:space:]]*if (\$host /c\  if ($host != localhost) {' \
         /etc/nginx/conf.d/galatadergisi.org.conf \

@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24.18.0-alpine
+
+RUN apk add --no-cache chromium
+
+ENV CHROME_BIN=/usr/bin/chromium-browser \
+    HOME=/tmp/chromium-home
+
+WORKDIR /app
+COPY --chown=node:node scripts/test-csp-browser.mjs /app/test-csp-browser.mjs
+
+USER node
+
+CMD ["node", "/app/test-csp-browser.mjs"]

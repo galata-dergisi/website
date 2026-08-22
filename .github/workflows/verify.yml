@@ -67,6 +67,11 @@ jobs:
       - name: Run service-worker lifecycle tests
         run: npm run test:service-worker
 
+      - name: Run production-preview CSP browser acceptance
+        run: npm run test:production-preview
+        env:
+          GALATA_MEDIA_ROOT: ${{ github.workspace }}/.static-assets/server-assets/public
+
       - name: Run deployment and cache-purge unit tests
         run: node --test tests/cache-purge-manifest.test.mjs tests/deploy-server.test.mjs
 

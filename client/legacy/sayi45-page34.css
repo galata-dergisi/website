@@ -1,0 +1,32 @@
+.video-play-button {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 500px;
+  height: 700px;
+  font-size: 72px;
+  transition: color .3s ease;
+  text-align: center;
+  line-height: 700px;
+  color: #bbb;
+}
+
+.video-play-button:hover {
+  color: #eee;
+  cursor: pointer;
+}
+
+.video-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 500px;
+  height: 700px;
+  background: #000;
+  opacity: .4;
+}
+
+.video-mask.hide,
+.video-play-button.hide {
+  display: none;
+}

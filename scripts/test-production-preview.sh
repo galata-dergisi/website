@@ -57,6 +57,8 @@ fi
 
 export GALATA_MEDIA_ROOT="$media_root"
 export GALATA_PREVIEW_HTTPS_PORT="$preview_port"
+export GALATA_PREVIEW_CSP_VARIANT=production
+export GALATA_PREVIEW_ENFORCE_CSP=0
 
 docker compose -p "$project" -f "$compose_file" config --quiet
 docker compose -p "$project" -f "$compose_file" up --build --detach
@@ -121,6 +123,46 @@ assert_file_contains "$temporary_dir/home.html" \
 if grep -F 'window.galataDevelopment' "$temporary_dir/home.html" >/dev/null; then
   fail "development rendering marker exists in production HTML"
 fi
+
+curl --silent --show-error --insecure --max-time 10 \
+  --output "$temporary_dir/legacy-video.html" \
+  "$base_url/dergiler/sayi45/34"
+assert_file_contains "$temporary_dir/legacy-video.html" \
+  '/assets/legacy/sayi45-page34.css?v=' \
+  "legacy video stylesheet is not externalized"
+assert_file_contains "$temporary_dir/legacy-video.html" \
+  '/assets/legacy/sayi45-page34.js?v=' \
+  "legacy video script is not externalized"
+if grep -i '<style' "$temporary_dir/legacy-video.html" >/dev/null; then
+  fail "legacy video page retains an inline style element"
+fi
+
+curl --silent --show-error --insecure --max-time 10 \
+  --output "$temporary_dir/profile.html" \
+  "$base_url/katkida-bulunanlar/15-nafizcan-onder"
+assert_file_contains "$temporary_dir/profile.html" \
+  '/assets/contributor-profile.css?v=' \
+  "contributor profile stylesheet is not externalized"
+assert_file_contains "$temporary_dir/profile.html" \
+  '/assets/contributor-profile.js?v=' \
+  "contributor profile script is not externalized"
+if grep -i '<style' "$temporary_dir/profile.html" >/dev/null; then
+  fail "contributor profile retains an inline style element"
+fi
+
+curl --silent --show-error --insecure --max-time 10 \
+  --dump-header "$temporary_dir/legacy-css.headers" \
+  --output /dev/null \
+  "$base_url/assets/legacy/sayi45-page34.css"
+assert_file_contains "$temporary_dir/legacy-css.headers" 'Content-Type: text/css' \
+  "legacy stylesheet content type is incorrect"
+curl --silent --show-error --insecure --max-time 10 \
+  --dump-header "$temporary_dir/profile-js.headers" \
+  --output /dev/null \
+  "$base_url/assets/contributor-profile.js"
+assert_file_contains "$temporary_dir/profile-js.headers" \
+  'Content-Type: text/javascript' \
+  "contributor profile script content type is incorrect"
 
 curl --silent --show-error --insecure --max-time 10 \
   --header 'Accept-Encoding: gzip' \
@@ -237,4 +279,61 @@ if grep -E '"(GET|HEAD|POST) /' "$temporary_dir/nginx.log" >/dev/null; then
   fail "nginx emitted an access log record"
 fi
 
-echo "Production preview smoke test passed at $base_url."
+run_enforced_csp_acceptance() {
+  variant=$1
+  export GALATA_PREVIEW_CSP_VARIANT="$variant"
+  export GALATA_PREVIEW_ENFORCE_CSP=1
+
+  docker compose -p "$project" -f "$compose_file" build nginx
+  docker compose -p "$project" -f "$compose_file" \
+    up --detach --no-deps --force-recreate nginx
+
+  ready=false
+  attempt=1
+  while [ "$attempt" -le 60 ]; do
+    if curl --silent --show-error --insecure --fail --max-time 3 \
+      "$base_url/healthz" >/dev/null 2>&1
+    then
+      ready=true
+      break
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  if [ "$ready" != true ]; then
+    fail "$variant enforced CSP endpoint did not become healthy"
+  fi
+
+  curl --silent --show-error --insecure --max-time 10 \
+    --dump-header "$temporary_dir/$variant-enforced.headers" \
+    --output /dev/null \
+    "$base_url/"
+  expected_csp=$(sed -n \
+    's/^add_header Content-Security-Policy-Report-Only "\(.*\)" always;$/\1/p' \
+    "$repo_root/ops/nginx/galata-$variant-csp.conf")
+  actual_csp=$(awk '
+    tolower($1) == "content-security-policy:" {
+      sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit
+    }
+  ' "$temporary_dir/$variant-enforced.headers")
+  if [ -z "$expected_csp" ] || [ "$actual_csp" != "$expected_csp" ]; then
+    fail "$variant enforced CSP header does not match its deployed policy"
+  fi
+  if grep -i '^Content-Security-Policy-Report-Only:' \
+    "$temporary_dir/$variant-enforced.headers" >/dev/null
+  then
+    fail "$variant test image retained the report-only CSP header"
+  fi
+
+  if ! docker compose --profile csp -p "$project" -f "$compose_file" \
+    run --rm --no-deps browser
+  then
+    fail "$variant enforced CSP browser acceptance"
+  fi
+}
+
+docker compose --profile csp -p "$project" -f "$compose_file" build browser
+run_enforced_csp_acceptance production
+run_enforced_csp_acceptance dev
+
+echo "Production preview and enforced CSP browser acceptance passed at $base_url."

@@ -21,6 +21,9 @@ services:
     build:
       context: ../..
       dockerfile: ops/local-production/Dockerfile.nginx
+      args:
+        GALATA_PREVIEW_CSP_VARIANT: ${GALATA_PREVIEW_CSP_VARIANT:-production}
+        GALATA_PREVIEW_ENFORCE_CSP: ${GALATA_PREVIEW_ENFORCE_CSP:-0}
     depends_on:
       app:
         condition: service_started
@@ -36,6 +39,30 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+
+  browser:
+    profiles:
+      - csp
+    build:
+      context: ../..
+      dockerfile: ops/local-production/Dockerfile.browser
+    depends_on:
+      nginx:
+        condition: service_started
+    network_mode: service:app
+    environment:
+      CHROME_BIN: /usr/bin/chromium-browser
+      GALATA_CSP_BASE_URL: https://localhost
+      GALATA_CSP_VARIANT: ${GALATA_PREVIEW_CSP_VARIANT:-production}
+      HOME: /tmp/chromium-home
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 10s

@@ -9,6 +9,12 @@ const zlib = require('zlib');
 const iconLibrary = require('../client/lib/font-awesome-icons.js');
 const { openReadOnly } = require('./lib/sqlite-reader.js');
 const { decodeHtmlEntities } = require('./lib/seo-utils.js');
+const { executableScriptSources } = require('./lib/executable-script-policy.js');
+const {
+  assertClosedHtmlElement,
+  collectHtmlElements,
+  inlineScriptDisposition,
+} = require('./lib/html-policy.js');
 const {
   applyShellAssetVersions,
   readShellAssetManifest,
@@ -65,25 +71,14 @@ const fixedCspDirectives = new Map([
   ['manifest-src', ["'self'"]],
   ['media-src', ["'self'"]],
   ['object-src', ["'none'"]],
+  ['script-src', ["'self'"]],
   ['script-src-attr', ["'none'"]],
   ['style-src', ["'self'"]],
+  ['style-src-elem', ["'self'"]],
   ['style-src-attr', ["'unsafe-inline'"]],
   ['worker-src', ["'self'"]],
   ['upgrade-insecure-requests', []],
 ]);
-
-function attributeValue(attributes, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = attributes.match(new RegExp(
-    `(?:^|\\s)${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
-    'i',
-  ));
-  return match ? (match[1] ?? match[2] ?? match[3]) : null;
-}
-
-function sourceHash(content) {
-  return `'sha256-${crypto.createHash('sha256').update(content).digest('base64')}'`;
-}
 
 function parseCspInclude(filename) {
   const source = fs.readFileSync(filename, 'utf8');
@@ -106,9 +101,7 @@ function parseCspInclude(filename) {
 }
 
 function assertSameOriginResource(value, route, context) {
-  const decoded = String(value)
-    .replace(/&quot;|&#34;/gi, '"')
-    .replace(/&amp;|&#38;/gi, '&')
+  const decoded = decodeHtmlEntities(String(value))
     .replace(/^['"]|['"]$/g, '');
   if (!decoded || decoded.startsWith('#')) return;
   let resolved;
@@ -125,7 +118,7 @@ function assertSameOriginResource(value, route, context) {
   );
 }
 
-function inspectResourceUrls(html, route) {
+function inspectResourceUrls(source, route, elements = []) {
   const resourceAttributes = new Map([
     ['script', ['src']],
     ['link', ['href']],
@@ -135,59 +128,63 @@ function inspectResourceUrls(html, route) {
     ['video', ['src', 'poster']],
     ['track', ['src']],
   ]);
-  for (const [tag, names] of resourceAttributes) {
-    const pattern = new RegExp(`<${tag}\\b([^>]*)>`, 'gi');
-    for (const match of html.matchAll(pattern)) {
-      names.forEach((name) => {
-        const value = attributeValue(match[1], name);
-        if (value === null) return;
-        const candidates = name === 'srcset'
-          ? value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0])
-          : [value];
-        candidates.forEach((candidate) => {
-          assertSameOriginResource(candidate, route, `${tag} ${name}`);
-        });
+  elements.forEach((element) => {
+    const names = resourceAttributes.get(element.tagName) || [];
+    names.forEach((name) => {
+      if (!element.attributes.has(name)) return;
+      const value = element.attributes.get(name);
+      const candidates = name === 'srcset'
+        ? value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0])
+        : [value];
+      candidates.forEach((candidate) => {
+        assertSameOriginResource(candidate, route, `${element.tagName} ${name}`);
       });
+    });
+    if (element.tagName === 'form' && element.attributes.has('action')) {
+      assertSameOriginResource(element.attributes.get('action'), route, 'form action');
     }
-  }
-  for (const match of html.matchAll(/<form\b([^>]*)>/gi)) {
-    const action = attributeValue(match[1], 'action');
-    if (action !== null) assertSameOriginResource(action, route, 'form action');
-  }
-  for (const match of html.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
+  });
+  for (const match of source.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
     assertSameOriginResource(match[2], route, 'CSS resource');
   }
 }
 
-function inspectGeneratedCsp() {
-  const executableScriptHashes = new Set();
-  const styleElementHashes = new Set();
+function inspectGeneratedCsp(development) {
+  const scriptSources = executableScriptSources({
+    development,
+    expectedBaseUrl,
+    shellAssetManifest,
+  });
   Object.entries(manifest.routes)
     .filter(([, entry]) => entry.contentType.startsWith('text/html'))
     .forEach(([route]) => {
       const html = readRoute(route);
+      const elements = collectHtmlElements(html);
       assert(
-        !/<[a-z][^>]*\son[a-z0-9_-]+\s*=/i.test(html),
+        !elements.some((element) => Array.from(element.attributes.keys())
+          .some((name) => /^on[a-z0-9_-]+$/i.test(name))),
         `${route} contains an inline event handler`,
       );
       assert(
-        !/<(?:iframe|frame|object|embed)\b/i.test(html),
+        !elements.some((element) => (
+          ['iframe', 'frame', 'object', 'embed'].includes(element.tagName)
+        )),
         `${route} contains a forbidden frame or object`,
       );
-      inspectResourceUrls(html, route);
-      for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-        if (attributeValue(match[1], 'src') !== null) continue;
-        const type = (attributeValue(match[1], 'type') || '')
-          .trim().toLowerCase().split(';')[0];
-        if (![
-          '', 'module', 'text/javascript', 'application/javascript',
-          'text/ecmascript', 'application/ecmascript',
-        ].includes(type)) continue;
-        if (match[2]) executableScriptHashes.add(sourceHash(match[2]));
-      }
-      for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
-        styleElementHashes.add(sourceHash(match[1]));
-      }
+      inspectResourceUrls(html, route, elements);
+      elements.filter((element) => element.tagName === 'script').forEach((element) => {
+        assertClosedHtmlElement(element, route);
+        const disposition = inlineScriptDisposition(element);
+        if (disposition === 'external') {
+          scriptSources.assertAllowed(element.attributes.get('src'), route);
+          return;
+        }
+        assert(disposition === 'inert', `${route} contains an executable inline script`);
+      });
+      elements.filter((element) => element.tagName === 'style').forEach((element) => {
+        assertClosedHtmlElement(element, route);
+        assert(false, `${route} contains an inline style element`);
+      });
     });
 
   Object.entries(manifest.routes)
@@ -216,28 +213,8 @@ function inspectGeneratedCsp() {
         `${label} ${directive} changed`,
       );
     });
-    nodeAssert.deepEqual(
-      new Set(policy.directives.get('script-src').slice(1)),
-      executableScriptHashes,
-      `${label} executable inline-script hashes are stale`,
-    );
-    assert(
-      policy.directives.get('script-src')[0] === "'self'",
-      `${label} script-src must begin with self`,
-    );
-    nodeAssert.deepEqual(
-      new Set(policy.directives.get('style-src-elem').slice(1)),
-      styleElementHashes,
-      `${label} inline style-element hashes are stale`,
-    );
-    assert(
-      policy.directives.get('style-src-elem')[0] === "'self'",
-      `${label} style-src-elem must begin with self`,
-    );
   });
   assert(policies[0].policy === policies[1].policy, 'report-only CSP policies differ');
-  assert(executableScriptHashes.size === 2, 'reviewed executable script hash count changed');
-  assert(styleElementHashes.size === 4, 'reviewed style element hash count changed');
 }
 
 function readEntry(entry, gzip = false) {
@@ -522,7 +499,7 @@ try {
         `${route} contains removed Google analytics or font requests`,
       );
     });
-  inspectGeneratedCsp();
+  inspectGeneratedCsp(development);
   if (development) {
     assert(manifest.routes[DEVELOPMENT_RUNTIME_PATH], 'development runtime route missing');
     assert(
