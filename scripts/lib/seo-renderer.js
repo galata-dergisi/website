@@ -22,6 +22,10 @@ const {
 
 const FEED_TITLE = 'Galata Dergisi';
 const TWITTER_SITE = '@GalataDergisi';
+const HOMEPAGE_CAROUSEL_PRELOAD_MARKER =
+  '<!-- homepage-carousel-placeholder-preload -->';
+const HOMEPAGE_CAROUSEL_PRELOAD =
+  '<link rel="preload" as="image" type="image/webp" href="/images/carousel-thumbnail-placeholders.webp" />';
 const FLAT_PROFILE_MAX_ROW_COUNT = 5;
 const LONG_PROFILE_ROW_COUNT = 20;
 const PROFILE_CONTRIBUTION_GROUPS = Object.freeze([
@@ -769,7 +773,10 @@ class SeoRenderer {
   }
 
   renderDocument(props, metadata) {
-    const template = this.getTemplate();
+    const template = this.getTemplate().replace(
+      HOMEPAGE_CAROUSEL_PRELOAD_MARKER,
+      props.initialMagazineIndex === null ? HOMEPAGE_CAROUSEL_PRELOAD : '',
+    );
     const pageProps = {
       ...props,
       initialArtwork: this.homepageArtwork,

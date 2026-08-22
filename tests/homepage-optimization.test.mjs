@@ -79,6 +79,14 @@ test('homepage markup uses optimized image sources and the unified application b
   );
   assert.match(home, /srcset="\/images\/homepage-covers\/sayi47-100\.[a-f0-9]{16}\.avif 100w, \/images\/homepage-covers\/sayi47-180\.[a-f0-9]{16}\.avif 180w"/);
   assert.match(home, /<img src="\/images\/sayi47\/thumbnail\.jpg"/);
+  assert.match(
+    home,
+    /<link rel="preload" as="image" type="image\/webp" href="\/images\/carousel-thumbnail-placeholders\.webp\?v=[a-f0-9]{16}" \/>/,
+  );
+  assert.doesNotMatch(
+    directReader,
+    /<link rel="preload"[^>]+carousel-thumbnail-placeholders\.webp/,
+  );
   for (const document_ of [home, directReader]) {
     assert.equal(document_.includes(shell.assets['/bundle.js'].url), true);
     assert.equal(document_.includes(shell.assets['/bundle.css'].url), true);
