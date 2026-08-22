@@ -52,11 +52,11 @@
       title="GNU Genel Kamu Lisansı">GNU Genel Kamu Lisansı
     </a> ile lisanslıdır.
   <a
-    href="https://github.com/galata-dergisi/galata-dergisi"
+    href="https://github.com/galata-dergisi/website"
     title="Galata Dergisi Kaynak Kodları için GitHub Sayfası"
     target="_blank"
     >
-    <GithubIcon /> galata-dergisi
+    <GithubIcon /> galata-dergisi/website
   </a>
   <br />
   &copy; 2020 Galata Dergisi. Dergilerdeki hiçbir içerik izinsiz kopyalanamaz.

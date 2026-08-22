@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/galata-dergisi/galata-dergisi/internal/application"
-	"github.com/galata-dergisi/galata-dergisi/internal/dotenv"
-	"github.com/galata-dergisi/galata-dergisi/internal/site"
+	"github.com/galata-dergisi/website/internal/application"
+	"github.com/galata-dergisi/website/internal/dotenv"
+	"github.com/galata-dergisi/website/internal/site"
 )
 
 const productionEnvironmentFilename = ".env.production"

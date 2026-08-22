@@ -49,12 +49,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/galata-dergisi/galata-dergisi.git"
+    "url": "git+https://github.com/galata-dergisi/website.git"
   },
   "bugs": {
-    "url": "https://github.com/galata-dergisi/galata-dergisi/issues"
+    "url": "https://github.com/galata-dergisi/website/issues"
   },
-  "homepage": "https://github.com/galata-dergisi/galata-dergisi#readme",
+  "homepage": "https://github.com/galata-dergisi/website#readme",
   "packageManager": "npm@11.16.0",
   "allowScripts": {
     "@parcel/watcher@2.6.0": true,

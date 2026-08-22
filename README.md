@@ -1,4 +1,4 @@
-# galata-dergisi
+# Galata Dergisi website
 
 [Türkçe için tıklayınız.](README-TR.md)
 
@@ -20,7 +20,7 @@ For a watched local frontend, generated site, Go server, and local media, see th
 
 ## Contributing to galata-dergisi
 
-* If you want to report an issue or request a new feature then please [create an issue](https://github.com/galata-dergisi/galata-dergisi/issues).
+* If you want to report an issue or request a new feature then please [create an issue](https://github.com/galata-dergisi/website/issues).
 * If you want to contribute to the software then please open an issue first and then assign it to yourself. Otherwise there is a chance for us to be working on the same thing since we don't publish our roadmap.
 
 ## License
