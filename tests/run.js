@@ -2177,11 +2177,14 @@ test('keeps the local production preview on the production runtime boundary', ()
   );
   assert.match(nginxDockerfile, /server_name localhost/);
   assert.match(nginxDockerfile, /nginx -t/);
+  assert.doesNotMatch(nginxDockerfile, /access\.log/);
+  assert.match(nginxDockerfile, /\/dev\/stderr \/var\/log\/nginx\/galatadergisi\.org\/error\.log/);
   assert.match(smokeSource, /GALATA_PREVIEW_SMOKE_HTTPS_PORT:-44444/);
   assert.match(smokeSource, /assert_status 304/);
   assert.match(smokeSource, /assert_status 206/);
   assert.match(smokeSource, /Content-Type: audio\/mpeg/);
   assert.match(smokeSource, /retired contribution endpoint/);
+  assert.match(smokeSource, /nginx emitted an access log record/);
   assert.match(previewSource, /env_file="\$repo_root\/\.env\.production"/);
   assert.match(previewSource, /if \[ -f "\$env_file" \]/);
   assert.match(

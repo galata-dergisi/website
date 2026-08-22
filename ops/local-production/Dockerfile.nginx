@@ -37,7 +37,6 @@ RUN sed -i \
         -keyout /etc/nginx/ssl-certs/galatadergisi.org/private.pem \
         -out /etc/nginx/ssl-certs/galatadergisi.org/public.pem \
     && chmod 0600 /etc/nginx/ssl-certs/galatadergisi.org/private.pem \
-    && ln -sf /dev/stdout /var/log/nginx/galatadergisi.org/access.log \
     && ln -sf /dev/stderr /var/log/nginx/galatadergisi.org/error.log \
     && nginx -t
 

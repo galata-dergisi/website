@@ -201,6 +201,14 @@ test('nginx token suppression is scoped to each application server', () => {
   }
 });
 
+test('server setup installs and verifies the logrotate timer', () => {
+  const source = fs.readFileSync(setupScript, 'utf8');
+  assert.match(source, /nginx logrotate fail2ban/);
+  assert.match(source, /systemctl enable --now logrotate\.timer/);
+  assert.match(source, /assert_service_active logrotate\.timer/);
+  assert.match(source, /assert_service_enabled logrotate\.timer/);
+});
+
 test('UFW defaults are verified from policy configuration, not status wording', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'galata-ufw-policy-test-'));
   const defaults = path.join(root, 'ufw');

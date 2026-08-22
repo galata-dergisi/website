@@ -33,6 +33,7 @@ const productionNginxPath = path.join(
 );
 const sharedNginxPath = path.join(repoRoot, 'ops/nginx/galata-shared.conf');
 const devNginxPath = path.join(repoRoot, 'ops/nginx/dev.galatadergisi.org.conf');
+const nginxLogrotatePath = path.join(repoRoot, 'ops/logrotate/galata-nginx');
 const serverSetupPath = path.join(repoRoot, 'ops/setup-server.sh');
 const productionServerPath = path.join(repoRoot, 'cmd/galata-server/main.go');
 const developmentServerPath = path.join(repoRoot, 'cmd/galata-dev/main.go');
@@ -167,6 +168,10 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
       pattern: /^\s*error_log \/var\/log\/nginx\/galatadergisi\.org\/error\.log notice;\s*$/m,
     },
     {
+      label: 'disabled nginx access logging',
+      pattern: /^\s*access_log off;\s*$/m,
+    },
+    {
       label: 'stripped Cloudflare visitor address',
       pattern: /^\s*proxy_set_header CF-Connecting-IP "";\s*$/m,
     },
@@ -212,6 +217,10 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
       pattern: /\b(?:real_ip_header|set_real_ip_from)\b/,
     },
     {
+      label: 'enabled nginx access log',
+      pattern: /^\s*access_log\s+(?!off;)[^;]+;/m,
+    },
+    {
       label: 'enabled limiter dry-run mode',
       pattern: /\blimit_(?:req|conn)_dry_run\s+on;/,
     },
@@ -251,6 +260,36 @@ if (!fs.existsSync(devNginxPath)) {
   if (/\bauth_basic\b/.test(devBoundary)) {
     failures.push('dev nginx configuration contains origin basic authentication');
   }
+  if (!/^\s*access_log off;\s*$/m.test(devBoundary)) {
+    failures.push('dev nginx configuration lacks disabled nginx access logging');
+  }
+  if (/^\s*access_log\s+(?!off;)[^;]+;/m.test(devBoundary)) {
+    failures.push('enabled nginx access log exists in dev nginx configuration');
+  }
+}
+
+if (!fs.existsSync(nginxLogrotatePath)) {
+  failures.push('nginx error-log rotation policy is missing');
+} else {
+  const nginxLogrotate = fs.readFileSync(nginxLogrotatePath, 'utf8');
+  [
+    [
+      /^\/var\/log\/nginx\/galatadergisi\.org\/error\.log \/var\/log\/nginx\/dev\.galatadergisi\.org\/error\.log \{$/m,
+      'both nginx error logs',
+    ],
+    [/^\s*daily\s*$/m, 'daily nginx error-log rotation'],
+    [/^\s*rotate 30\s*$/m, 'thirty nginx error-log rotations'],
+    [/^\s*maxage 30\s*$/m, 'thirty-day nginx error-log maximum age'],
+    [/^\s*compress\s*$/m, 'compressed nginx error logs'],
+    [/^\s*delaycompress\s*$/m, 'delayed nginx error-log compression'],
+    [/^\s*missingok\s*$/m, 'missing nginx error-log tolerance'],
+    [/^\s*notifempty\s*$/m, 'empty nginx error-log suppression'],
+    [/^\s*create 0640 www-data adm\s*$/m, 'restricted nginx error-log permissions'],
+    [/^\s*sharedscripts\s*$/m, 'shared nginx post-rotation hook'],
+    [/kill -USR1 "\$\(cat \/run\/nginx\.pid\)"/, 'nginx log-reopen signal'],
+  ].forEach(([pattern, label]) => {
+    if (!pattern.test(nginxLogrotate)) failures.push(`nginx logrotate policy lacks ${label}`);
+  });
 }
 
 if (!fs.existsSync(serverSetupPath)) {

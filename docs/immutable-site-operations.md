@@ -271,6 +271,11 @@ tunnel is the only public route to that listener. Dev has no origin
 request enters the tunnel, and **Protect with Access** validates its application
 token at the connector. Local activation probes remain independent of edge
 authentication. Visitor-address headers are stripped before proxying to Go.
+Nginx access logging is disabled at the shared HTTP boundary. Production and
+dev retain only their `notice`-level error logs; logrotate checks them daily,
+compresses rotated files, and removes rotations older than 30 days. Deployment
+configuration validates this policy and requires the daily `logrotate.timer`
+to remain enabled and active.
 
 ## Runtime configuration
 
@@ -379,8 +384,8 @@ private browser session with a disallowed identity and confirm that Access
 denies it.
 
 After an independently approved production deployment, run
-`verify production --public` and monitor nginx, `cloudflared`, application
-health, errors, and the deployment's URL-purge output. Cache invalidation is
+`verify production --public` and monitor nginx errors, `cloudflared`, application
+health, and the deployment's URL-purge output. Cache invalidation is
 part of deploy and rollback; no routine dashboard purge follows deployment.
 The deployment scripts never create or alter the remotely managed tunnel,
 published application routes, Cache Rules, or Cloudflare edge TLS

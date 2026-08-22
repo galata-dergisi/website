@@ -23,6 +23,7 @@ ENV container=docker
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       curl \
+      logrotate \
       nginx \
       rsync \
       systemd \
@@ -34,6 +35,7 @@ RUN apt-get update \
       systemd-remount-fs.service
 
 COPY ops/deploy-helper.sh /usr/local/sbin/galata-deploy-helper
+COPY ops/logrotate/galata-nginx /etc/logrotate.d/galata-nginx
 COPY ops/runtime-environment.sh /usr/local/libexec/galata-runtime-environment.sh
 COPY ops/systemd/galata-server.service /etc/systemd/system/galata-server.service
 COPY ops/systemd/galata-dev-server.service /etc/systemd/system/galata-dev-server.service
@@ -44,7 +46,9 @@ RUN chmod 0755 \
       /usr/local/sbin/galata-deploy-helper \
       /usr/local/sbin/run-galata-deploy-test \
       /usr/local/libexec/galata-runtime-environment.sh \
-      /usr/local/libexec/galata-deploy-health-server
+      /usr/local/libexec/galata-deploy-health-server \
+    && chmod 0644 /etc/logrotate.d/galata-nginx \
+    && logrotate --debug /etc/logrotate.conf
 
 STOPSIGNAL SIGRTMIN+3
 

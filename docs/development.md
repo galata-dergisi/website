@@ -88,6 +88,10 @@ site otherwise retains production canonical URLs, cache behavior, service
 worker registration, analytics, and security headers. Local visits can
 therefore send events to the production analytics service.
 
+The preview inherits the production access-log disable. Nginx errors go only
+to container stderr and are removed with the preview container; it does not
+create the persistent VPS error-log files or use their logrotate policy.
+
 The preview mounts the sibling production media checkout read-only at nginx's
 production media path. Use an absolute alternate path or port when needed:
 
@@ -97,7 +101,7 @@ GALATA_MEDIA_ROOT=/absolute/path/to/server-assets/public \
   npm run preview:production
 ```
 
-Follow both application and nginx logs or stop the preview with:
+Follow application output and nginx error output, or stop the preview with:
 
 ```sh
 docker compose -f ops/local-production/compose.yaml logs --follow

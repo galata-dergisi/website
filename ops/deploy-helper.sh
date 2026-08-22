@@ -9,6 +9,7 @@ PROCESS_ROOT=/var/lib/galata-deploy-processing
 CODE_RELEASES=/opt/galata/releases
 MEDIA_RELEASES=/var/www/galata-media/releases
 LOCK_FILE=/run/lock/galata-deploy.lock
+NGINX_LOGROTATE_POLICY=/etc/logrotate.d/galata-nginx
 
 die() { printf 'galata-deploy-helper: %s\n' "$*" >&2; exit 1; }
 note() { printf 'galata-deploy-helper: %s\n' "$*"; }
@@ -317,6 +318,16 @@ origin_check() {
   fi
 }
 
+verify_nginx_log_rotation() {
+  [ -f "$NGINX_LOGROTATE_POLICY" ] && [ ! -L "$NGINX_LOGROTATE_POLICY" ] \
+    || return 1
+  [ "$(stat -c '%U:%G %a' "$NGINX_LOGROTATE_POLICY")" = 'root:root 644' ] \
+    || return 1
+  logrotate --debug /etc/logrotate.conf >/dev/null 2>&1 || return 1
+  systemctl is-enabled --quiet logrotate.timer \
+    && systemctl is-active --quiet logrotate.timer
+}
+
 tunnel_connected() {
   curl --fail --silent --show-error --max-time 2 \
     http://127.0.0.1:20241/metrics 2>/dev/null | awk '
@@ -410,13 +421,14 @@ configure() {
   [ "${SUDO_USER:-root}" != galata-deploy ] || die "deployment identity cannot configure the host"
   bundle=$1
   for file in deploy-key.pub production.env dev.env galata-shared.conf \
-      galatadergisi.org.conf dev.galatadergisi.org.conf \
+      galatadergisi.org.conf dev.galatadergisi.org.conf galata-nginx \
       galata-server.service galata-dev-server.service cloudflared.service; do
     [ -f "$bundle/$file" ] && [ ! -L "$bundle/$file" ] || die "configuration bundle lacks $file"
   done
   getent group sshlogin >/dev/null || die "Phase 1 sshlogin group is missing"
   id galata >/dev/null 2>&1 || die "Phase 1 galata user is missing"
   command -v cloudflared >/dev/null 2>&1 || die "Phase 1 cloudflared package is missing"
+  command -v logrotate >/dev/null 2>&1 || die "logrotate package is missing"
   ufw status | grep -q '^Status: active$' || die "Phase 1 UFW policy is not active"
   if ufw status | grep -Eq '^[[:space:]]*(80|443|8080|3000|3001)(/tcp)?[[:space:]]+ALLOW'; then
     die "a web or application port is publicly allowed by UFW"
@@ -455,6 +467,7 @@ configure() {
   install -m 0644 -o root -g root "$bundle/galata-shared.conf" /etc/nginx/conf.d/galata-shared.conf
   install -m 0644 -o root -g root "$bundle/galatadergisi.org.conf" /etc/nginx/sites-available/galatadergisi.org.conf
   install -m 0644 -o root -g root "$bundle/dev.galatadergisi.org.conf" /etc/nginx/sites-available/dev.galatadergisi.org.conf
+  install -m 0644 -o root -g root "$bundle/galata-nginx" "$NGINX_LOGROTATE_POLICY"
   install -m 0644 -o root -g root "$bundle/galata-server.service" /etc/systemd/system/galata-server.service
   install -m 0644 -o root -g root "$bundle/galata-dev-server.service" /etc/systemd/system/galata-dev-server.service
   install -m 0644 -o root -g root "$bundle/cloudflared.service" /etc/systemd/system/cloudflared.service
@@ -462,6 +475,8 @@ configure() {
     /etc/nginx/sites-enabled/galatadergisi.org.conf
   ln -sfn /etc/nginx/sites-available/dev.galatadergisi.org.conf \
     /etc/nginx/sites-enabled/dev.galatadergisi.org.conf
+  systemctl enable --now logrotate.timer >/dev/null
+  verify_nginx_log_rotation || die "nginx error-log rotation is not valid and active"
   systemctl daemon-reload
   systemd-analyze verify /etc/systemd/system/galata-server.service \
     /etc/systemd/system/galata-dev-server.service \
@@ -598,6 +613,7 @@ verify() {
   systemctl is-enabled --quiet "$SERVICE" && systemctl is-active --quiet "$SERVICE" \
     || die "$SERVICE is not enabled and active"
   systemd-analyze verify "/etc/systemd/system/$SERVICE" >/dev/null
+  verify_nginx_log_rotation || die "nginx error-log rotation is not valid and active"
   origin_check "$SITE_RELEASE" || die "$SLOT origin verification failed"
   ufw status | grep -q '^Status: active$' || die "UFW is inactive"
   if ufw status | grep -Eq '^[[:space:]]*(80|443|8080|3000|3001)(/tcp)?[[:space:]]+ALLOW'; then

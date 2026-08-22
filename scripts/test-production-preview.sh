@@ -201,4 +201,10 @@ status=$(curl --silent --show-error --insecure --max-time 10 \
   "$base_url/katkida-bulunun")
 assert_status 405 "$status" "retired contribution endpoint"
 
+docker compose -p "$project" -f "$compose_file" \
+  logs --no-color nginx > "$temporary_dir/nginx.log"
+if grep -E '"(GET|HEAD|POST) /' "$temporary_dir/nginx.log" >/dev/null; then
+  fail "nginx emitted an access log record"
+fi
+
 echo "Production preview smoke test passed at $base_url."

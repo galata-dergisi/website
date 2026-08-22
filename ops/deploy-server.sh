@@ -351,6 +351,7 @@ make_bundle() {
   cp "$REPO_ROOT/ops/nginx/galata-shared.conf" "$BUNDLE/"
   cp "$REPO_ROOT/ops/nginx/galatadergisi.org.conf" "$BUNDLE/"
   cp "$REPO_ROOT/ops/nginx/dev.galatadergisi.org.conf" "$BUNDLE/"
+  cp "$REPO_ROOT/ops/logrotate/galata-nginx" "$BUNDLE/"
   cp "$REPO_ROOT/ops/systemd/galata-server.service" "$BUNDLE/"
   cp "$REPO_ROOT/ops/systemd/galata-dev-server.service" "$BUNDLE/"
   cp "$REPO_ROOT/ops/systemd/cloudflared.service" "$BUNDLE/"
@@ -368,7 +369,7 @@ configure_command() {
   [[ -t 0 ]] || die "configure is workstation-only and interactive"
   start_admin_control
   admin_ssh 'sudo -n true' || die "administrator connection or passwordless sudo failed"
-  admin_ssh 'sudo -n apt-get install -y rsync'
+  admin_ssh 'sudo -n apt-get install -y rsync logrotate'
   if [[ ! -e $DEPLOY_KEY_PATH && ! -e $DEPLOY_KEY_PATH.pub ]]; then
     read -r -p "Create deployment key at $DEPLOY_KEY_PATH? [y/N] " argument
     [[ $argument == y || $argument == Y ]] || die "cancelled"

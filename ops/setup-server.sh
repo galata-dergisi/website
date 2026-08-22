@@ -451,6 +451,7 @@ EOF
   nginx -t
   systemctl enable --now nginx.service >/dev/null
   systemctl reload nginx.service
+  systemctl enable --now logrotate.timer >/dev/null
 
   systemctl enable --now chrony.service >/dev/null
   systemctl enable auditd.service >/dev/null
@@ -678,10 +679,10 @@ remote_apply() {
   apt-get update
   if [ "$USG_ENABLED" = true ]; then
     apt-get install -y --no-install-recommends \
-      nginx fail2ban unattended-upgrades chrony auditd apparmor-utils usg cloudflared
+      nginx logrotate fail2ban unattended-upgrades chrony auditd apparmor-utils usg cloudflared
   else
     apt-get install -y --no-install-recommends \
-      nginx fail2ban unattended-upgrades chrony auditd apparmor-utils cloudflared
+      nginx logrotate fail2ban unattended-upgrades chrony auditd apparmor-utils cloudflared
   fi
   assert_cloudflared_version
 
@@ -805,6 +806,8 @@ remote_verify() {
     assert_service_active "$service"
     assert_service_enabled "$service"
   done
+  assert_service_active logrotate.timer
+  assert_service_enabled logrotate.timer
   assert_cloudflared_version
   [ "$(stat -c '%U:%G %a' /usr/share/keyrings/cloudflare-main.gpg)" = 'root:root 644' ] \
     || die "Cloudflare package key permissions are wrong"

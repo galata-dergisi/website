@@ -419,6 +419,8 @@ test('tracked helper encodes slot isolation, candidate checks, rollback, and sud
     deployTestDockerfile,
     /COPY ops\/runtime-environment\.sh \/usr\/local\/libexec\/galata-runtime-environment\.sh/,
   );
+  assert.match(deployTestDockerfile, /COPY ops\/logrotate\/galata-nginx/);
+  assert.match(deployTestDockerfile, /logrotate --debug \/etc\/logrotate\.conf/);
   assert.match(deploy, /start_admin_control/);
   assert.match(deploy, /ssh-keyscan -t rsa,ecdsa,ed25519/);
   assert.match(deploy, /\$2 == "ssh-rsa"/);
@@ -480,9 +482,15 @@ test('nginx keeps tunnel-only slots, Access boundary, and media roots independen
   const dev = fs.readFileSync(
     path.join(repositoryRoot, 'ops/nginx/dev.galatadergisi.org.conf'), 'utf8',
   );
+  const logrotate = fs.readFileSync(
+    path.join(repositoryRoot, 'ops/logrotate/galata-nginx'), 'utf8',
+  );
+  const deploy = fs.readFileSync(deployScript, 'utf8');
   assert.match(shared, /server 127\.0\.0\.1:3000/);
   assert.match(shared, /server 127\.0\.0\.1:3001/);
   assert.doesNotMatch(shared, /galata_from_cloudflare|173\.245\.48\.0\/20/);
+  assert.match(shared, /^access_log off;$/m);
+  assert.doesNotMatch(`${production}\n${dev}`, /\baccess_log\b/);
   assert.match(production, /listen 127\.0\.0\.1:8080;/);
   assert.match(dev, /listen 127\.0\.0\.1:8080;/);
   assert.doesNotMatch(`${production}\n${dev}`, /ssl_certificate|letsencrypt|listen 443/);
@@ -500,4 +508,20 @@ test('nginx keeps tunnel-only slots, Access boundary, and media roots independen
   assert.doesNotMatch(`${shared}\n${production}\n${dev}`, /listen\s+(80|443|3000|3001)\b/);
   const helper = fs.readFileSync(helperScript, 'utf8');
   assert.match(helper, /--header "Host: \$HOSTNAME" "http:\/\/127\.0\.0\.1:8080\/healthz"/);
+  assert.match(logrotate, /^\s*daily\s*$/m);
+  assert.match(logrotate, /^\s*rotate 30\s*$/m);
+  assert.match(logrotate, /^\s*maxage 30\s*$/m);
+  assert.match(logrotate, /^\s*compress\s*$/m);
+  assert.match(logrotate, /^\s*delaycompress\s*$/m);
+  assert.match(logrotate, /^\s*missingok\s*$/m);
+  assert.match(logrotate, /^\s*notifempty\s*$/m);
+  assert.match(logrotate, /^\s*create 0640 www-data adm\s*$/m);
+  assert.match(logrotate, /^\s*sharedscripts\s*$/m);
+  assert.match(logrotate, /kill -USR1 "\$\(cat \/run\/nginx\.pid\)"/);
+  assert.match(deploy, /ops\/logrotate\/galata-nginx/);
+  assert.match(deploy, /apt-get install -y rsync logrotate/);
+  assert.match(helper, /install -m 0644 -o root -g root "\$bundle\/galata-nginx"/);
+  assert.match(helper, /logrotate --debug \/etc\/logrotate\.conf/);
+  assert.match(helper, /systemctl enable --now logrotate\.timer/);
+  assert.match(helper, /systemctl is-active --quiet logrotate\.timer/);
 });
