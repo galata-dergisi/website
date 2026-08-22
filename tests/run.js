@@ -1648,7 +1648,7 @@ test('models carousel movement and buffering', async () => {
   );
 });
 
-test('retargets rapid carousel input from fractional positions', async () => {
+test('bounds rapid carousel input from fractional positions', async () => {
   const {
     beginCarouselMove,
     createCarouselState,
@@ -1671,13 +1671,13 @@ test('retargets rapid carousel input from fractional positions', async () => {
   }
 
   assert.deepStrictEqual(state, {
-    sourceFirstItemPosition: 0,
+    sourceFirstItemPosition: 2,
     targetFirstItemIndex: 5,
     animating: true,
   });
   assert.deepStrictEqual(
     getCarouselWindow(items, state, true).entries.map((entry) => entry.index),
-    [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    [1, 2, 3, 4, 5, 6, 7, 8],
   );
   assert.deepStrictEqual(finishCarouselMove(state, items), {
     sourceFirstItemPosition: 5,
@@ -1725,10 +1725,13 @@ test('retargets rapid carousel input from fractional positions', async () => {
   for (let press = 0; press < 100; press += 1) {
     boundaryState = beginCarouselMove(boundaryState, 1, 0, items);
   }
-  assert.strictEqual(boundaryState.sourceFirstItemPosition, 0);
+  assert.strictEqual(boundaryState.sourceFirstItemPosition, 40);
   assert.strictEqual(boundaryState.targetFirstItemIndex, 43);
   assert.strictEqual(beginCarouselMove(boundaryState, 1, 0, items), boundaryState);
-  assert.strictEqual(getCarouselWindow(items, boundaryState, true).entries.length, 46);
+  assert.deepStrictEqual(
+    getCarouselWindow(items, boundaryState, true).entries.map((entry) => entry.index),
+    [39, 40, 41, 42, 43, 44, 45],
+  );
 });
 
 test('clamps carousel boundaries and resets motion when items change', async () => {
@@ -1872,6 +1875,23 @@ test('keeps an outgoing carousel cover transparent until it is hidden', () => {
   );
 
   assert.match(source, /a\.fade-out\s*\{[^}]*animation:\s*fade-out \.3s ease forwards/s);
+});
+
+test('defers newly windowed cover images until carousel movement settles', () => {
+  const carousel = fs.readFileSync(
+    path.join(__dirname, '../client/pages/homepage/components/Carousel.svelte'),
+    'utf8',
+  );
+  const thumbnail = fs.readFileSync(
+    path.join(__dirname, '../client/pages/homepage/components/MagazineThumbnail.svelte'),
+    'utf8',
+  );
+
+  assert.match(carousel, /deferImage=\{carouselState\.animating\}/);
+  assert.match(thumbnail, /let imageEnabled = \$state\(false\)/);
+  assert.match(thumbnail, /let shouldRenderImage = \$derived\(imageEnabled \|\| !deferImage\)/);
+  assert.match(thumbnail, /if \(!deferImage\) imageEnabled = true/);
+  assert.match(thumbnail, /\{#if shouldRenderImage\}\s*<picture>/);
 });
 
 test('shows keyboard focus on magazine covers', () => {

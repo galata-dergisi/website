@@ -6,6 +6,7 @@
 export const VISIBLE_ITEM_COUNT = 3;
 export const ITEM_STEP = 150;
 export const TRANSITION_TIMEOUT = 350;
+export const MAX_TRANSITION_ITEM_DISTANCE = VISIBLE_ITEM_COUNT;
 
 function itemCount(value) {
   return Array.isArray(value) ? value.length : Math.max(0, Number(value) || 0);
@@ -50,10 +51,16 @@ export function reconcileCarouselState(state, value) {
 }
 
 export function rebaseCarouselMove(state, sourceFirstItemPosition, value) {
-  const sourcePosition = clampFirstItemPosition(sourceFirstItemPosition, value);
   const targetFirstItemIndex = clampFirstItemIndex(
     state.targetFirstItemIndex,
     value,
+  );
+  const sourcePosition = Math.min(
+    Math.max(
+      clampFirstItemPosition(sourceFirstItemPosition, value),
+      targetFirstItemIndex - MAX_TRANSITION_ITEM_DISTANCE,
+    ),
+    targetFirstItemIndex + MAX_TRANSITION_ITEM_DISTANCE,
   );
   return {
     sourceFirstItemPosition: sourcePosition,

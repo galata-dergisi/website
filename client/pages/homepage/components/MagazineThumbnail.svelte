@@ -30,6 +30,7 @@
     thumbnailSources = { avif: [] },
     visible = true,
     carouselItem = false,
+    deferImage = false,
     motion = null,
     onLoadMagazine = () => {},
   } = $props();
@@ -47,6 +48,12 @@
       .map((source) => `${source.src} ${source.width}w`)
       .join(', '),
   );
+  let imageEnabled = $state(false);
+  let shouldRenderImage = $derived(imageEnabled || !deferImage);
+
+  $effect(() => {
+    if (!deferImage) imageEnabled = true;
+  });
 
   function handleClick(event) {
     if (!shouldHandleClientNavigation(event, event.currentTarget)) return;
@@ -149,18 +156,20 @@
     class="thumbnail-container"
     class:has-placeholder={placeholderPosition}
     style={thumbnailStyle}>
-    <picture>
-      {#if avifSrcset}
-        <source srcset={avifSrcset} sizes="100px" type="image/avif" />
-      {/if}
-      <img
-        src={thumbnailURL}
-        alt="Sayı {index}, {publishDateText}"
-        width="100"
-        height="140"
-        decoding="async"
-        loading={carouselItem ? 'lazy' : 'eager'}
-        fetchpriority={carouselItem ? 'auto' : 'high'} />
-    </picture>
+    {#if shouldRenderImage}
+      <picture>
+        {#if avifSrcset}
+          <source srcset={avifSrcset} sizes="100px" type="image/avif" />
+        {/if}
+        <img
+          src={thumbnailURL}
+          alt="Sayı {index}, {publishDateText}"
+          width="100"
+          height="140"
+          decoding="async"
+          loading={carouselItem ? 'lazy' : 'eager'}
+          fetchpriority={carouselItem ? 'auto' : 'high'} />
+      </picture>
+    {/if}
   </div>
 </a>

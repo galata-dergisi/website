@@ -100,7 +100,8 @@
     transitionEnabled = true;
   }
 
-  async function restartMovement(nextState, sourcePosition) {
+  async function restartMovement(nextState) {
+    const sourcePosition = nextState.sourceFirstItemPosition;
     const revision = transitionRevision + 1;
     transitionRevision = revision;
     clearCompletionTimer();
@@ -147,7 +148,7 @@
       sourcePosition,
       items,
     );
-    restartMovement(nextState, sourcePosition);
+    restartMovement(nextState);
   }
 
   function move(direction) {
@@ -160,7 +161,7 @@
     );
     if (nextState === carouselState) return;
 
-    restartMovement(nextState, sourcePosition);
+    restartMovement(nextState);
   }
 
   function enableBuffer() {
@@ -227,6 +228,7 @@
     {#each renderedWindow.entries as entry (entry.item.index)}
       <MagazineThumbnail {...entry.item}
         visible={entry.visible}
+        deferImage={carouselState.animating}
         motion={entry.motion}
         carouselItem={true}
         {onLoadMagazine} />
