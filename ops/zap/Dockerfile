@@ -12,6 +12,7 @@ RUN npm ci
 
 COPY client/ client/
 COPY content/ content/
+COPY ops/nginx/ ops/nginx/
 COPY scripts/ scripts/
 COPY postcss.config.mjs svelte.config.mjs ./
 

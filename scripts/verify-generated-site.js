@@ -14,6 +14,10 @@ const {
   readShellAssetManifest,
   shellAssetEntries,
 } = require('./lib/shell-assets.js');
+const {
+  DEVELOPMENT_RUNTIME_PATH,
+  DEVELOPMENT_RUNTIME_SOURCE,
+} = require('./lib/development-rendering.js');
 
 const repoRoot = path.resolve(__dirname, '..');
 const siteRoot = path.resolve(process.argv[2] || path.join(repoRoot, 'internal/site/dist'));
@@ -26,6 +30,214 @@ const reader = openReadOnly(path.join(repoRoot, 'content/public.sqlite'));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+const cspDirectiveOrder = [
+  'default-src',
+  'base-uri',
+  'connect-src',
+  'font-src',
+  'form-action',
+  'frame-ancestors',
+  'frame-src',
+  'img-src',
+  'manifest-src',
+  'media-src',
+  'object-src',
+  'script-src',
+  'script-src-attr',
+  'style-src',
+  'style-src-elem',
+  'style-src-attr',
+  'worker-src',
+  'upgrade-insecure-requests',
+];
+
+const fixedCspDirectives = new Map([
+  ['default-src', ["'none'"]],
+  ['base-uri', ["'none'"]],
+  ['connect-src', ["'self'"]],
+  ['font-src', ["'self'"]],
+  ['form-action', ["'self'"]],
+  ['frame-ancestors', ["'self'"]],
+  ['frame-src', ["'none'"]],
+  ['img-src', ["'self'"]],
+  ['manifest-src', ["'self'"]],
+  ['media-src', ["'self'"]],
+  ['object-src', ["'none'"]],
+  ['script-src-attr', ["'none'"]],
+  ['style-src', ["'self'"]],
+  ['style-src-attr', ["'unsafe-inline'"]],
+  ['worker-src', ["'self'"]],
+  ['upgrade-insecure-requests', []],
+]);
+
+function attributeValue(attributes, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = attributes.match(new RegExp(
+    `(?:^|\\s)${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  ));
+  return match ? (match[1] ?? match[2] ?? match[3]) : null;
+}
+
+function sourceHash(content) {
+  return `'sha256-${crypto.createHash('sha256').update(content).digest('base64')}'`;
+}
+
+function parseCspInclude(filename) {
+  const source = fs.readFileSync(filename, 'utf8');
+  const headers = Array.from(source.matchAll(
+    /add_header\s+(Content-Security-Policy(?:-Report-Only)?)\s+"([^"]+)"\s+always;/g,
+  ));
+  assert(headers.length === 1, `${path.basename(filename)} must define exactly one CSP header`);
+  const directives = new Map();
+  headers[0][2].split(';').map((entry) => entry.trim()).filter(Boolean)
+    .forEach((entry) => {
+      const [name, ...values] = entry.split(/\s+/);
+      assert(!directives.has(name), `${path.basename(filename)} repeats ${name}`);
+      directives.set(name, values);
+    });
+  return {
+    header: headers[0][1],
+    policy: headers[0][2],
+    directives,
+  };
+}
+
+function assertSameOriginResource(value, route, context) {
+  const decoded = String(value)
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&amp;|&#38;/gi, '&')
+    .replace(/^['"]|['"]$/g, '');
+  if (!decoded || decoded.startsWith('#')) return;
+  let resolved;
+  try {
+    resolved = new URL(decoded, `${expectedBaseUrl}/`);
+  } catch (error) {
+    throw new Error(`${route} has an invalid ${context} URL: ${value}`, {
+      cause: error,
+    });
+  }
+  assert(
+    resolved.origin === new URL(expectedBaseUrl).origin,
+    `${route} has an external ${context} origin: ${value}`,
+  );
+}
+
+function inspectResourceUrls(html, route) {
+  const resourceAttributes = new Map([
+    ['script', ['src']],
+    ['link', ['href']],
+    ['img', ['src', 'srcset']],
+    ['source', ['src', 'srcset']],
+    ['audio', ['src']],
+    ['video', ['src', 'poster']],
+    ['track', ['src']],
+  ]);
+  for (const [tag, names] of resourceAttributes) {
+    const pattern = new RegExp(`<${tag}\\b([^>]*)>`, 'gi');
+    for (const match of html.matchAll(pattern)) {
+      names.forEach((name) => {
+        const value = attributeValue(match[1], name);
+        if (value === null) return;
+        const candidates = name === 'srcset'
+          ? value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0])
+          : [value];
+        candidates.forEach((candidate) => {
+          assertSameOriginResource(candidate, route, `${tag} ${name}`);
+        });
+      });
+    }
+  }
+  for (const match of html.matchAll(/<form\b([^>]*)>/gi)) {
+    const action = attributeValue(match[1], 'action');
+    if (action !== null) assertSameOriginResource(action, route, 'form action');
+  }
+  for (const match of html.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
+    assertSameOriginResource(match[2], route, 'CSS resource');
+  }
+}
+
+function inspectGeneratedCsp() {
+  const executableScriptHashes = new Set();
+  const styleElementHashes = new Set();
+  Object.entries(manifest.routes)
+    .filter(([, entry]) => entry.contentType.startsWith('text/html'))
+    .forEach(([route]) => {
+      const html = readRoute(route);
+      assert(
+        !/<[a-z][^>]*\son[a-z0-9_-]+\s*=/i.test(html),
+        `${route} contains an inline event handler`,
+      );
+      assert(
+        !/<(?:iframe|frame|object|embed)\b/i.test(html),
+        `${route} contains a forbidden frame or object`,
+      );
+      inspectResourceUrls(html, route);
+      for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+        if (attributeValue(match[1], 'src') !== null) continue;
+        const type = (attributeValue(match[1], 'type') || '')
+          .trim().toLowerCase().split(';')[0];
+        if (![
+          '', 'module', 'text/javascript', 'application/javascript',
+          'text/ecmascript', 'application/ecmascript',
+        ].includes(type)) continue;
+        if (match[2]) executableScriptHashes.add(sourceHash(match[2]));
+      }
+      for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+        styleElementHashes.add(sourceHash(match[1]));
+      }
+    });
+
+  Object.entries(manifest.routes)
+    .filter(([, entry]) => entry.contentType.startsWith('text/css'))
+    .forEach(([route]) => inspectResourceUrls(readRoute(route), route));
+
+  const policies = [
+    parseCspInclude(path.join(repoRoot, 'ops/nginx/galata-production-csp.conf')),
+    parseCspInclude(path.join(repoRoot, 'ops/nginx/galata-dev-csp.conf')),
+  ];
+  policies.forEach((policy, index) => {
+    const label = index === 0 ? 'production CSP' : 'dev CSP';
+    assert(
+      policy.header === 'Content-Security-Policy-Report-Only',
+      `${label} must remain report-only until manual acceptance`,
+    );
+    nodeAssert.deepEqual(
+      Array.from(policy.directives.keys()),
+      cspDirectiveOrder,
+      `${label} directive structure changed`,
+    );
+    fixedCspDirectives.forEach((values, directive) => {
+      nodeAssert.deepEqual(
+        policy.directives.get(directive),
+        values,
+        `${label} ${directive} changed`,
+      );
+    });
+    nodeAssert.deepEqual(
+      new Set(policy.directives.get('script-src').slice(1)),
+      executableScriptHashes,
+      `${label} executable inline-script hashes are stale`,
+    );
+    assert(
+      policy.directives.get('script-src')[0] === "'self'",
+      `${label} script-src must begin with self`,
+    );
+    nodeAssert.deepEqual(
+      new Set(policy.directives.get('style-src-elem').slice(1)),
+      styleElementHashes,
+      `${label} inline style-element hashes are stale`,
+    );
+    assert(
+      policy.directives.get('style-src-elem')[0] === "'self'",
+      `${label} style-src-elem must begin with self`,
+    );
+  });
+  assert(policies[0].policy === policies[1].policy, 'report-only CSP policies differ');
+  assert(executableScriptHashes.size === 2, 'reviewed executable script hash count changed');
+  assert(styleElementHashes.size === 4, 'reviewed style element hash count changed');
 }
 
 function readEntry(entry, gzip = false) {
@@ -310,6 +522,25 @@ try {
         `${route} contains removed Google analytics or font requests`,
       );
     });
+  inspectGeneratedCsp();
+  if (development) {
+    assert(manifest.routes[DEVELOPMENT_RUNTIME_PATH], 'development runtime route missing');
+    assert(
+      readRoute(DEVELOPMENT_RUNTIME_PATH) === DEVELOPMENT_RUNTIME_SOURCE,
+      'development runtime route is not the stable reviewed asset',
+    );
+    assert(
+      homepage.includes('id="galata-development-config" type="application/json"'),
+      'development generation configuration is missing',
+    );
+    assert(
+      homepage.includes(`src="${DEVELOPMENT_RUNTIME_PATH}" defer`),
+      'development runtime is not loaded from its same-origin asset',
+    );
+  } else {
+    assert(!manifest.routes[DEVELOPMENT_RUNTIME_PATH], 'production exposes dev runtime');
+    assert(!homepage.includes('galata-development-config'), 'production exposes dev config');
+  }
   const bootstrapMarker = '<script id="galata-bootstrap" type="application/json">';
   const bootstrapStart = homepage.indexOf(bootstrapMarker);
   assert(bootstrapStart !== -1, 'homepage bootstrap data missing');

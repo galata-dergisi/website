@@ -20,6 +20,8 @@ const {
 } = require('./lib/homepage-images.js');
 const { readShellAssetManifest } = require('./lib/shell-assets.js');
 const {
+  DEVELOPMENT_RUNTIME_PATH,
+  DEVELOPMENT_RUNTIME_SOURCE,
   renderDevelopmentDocument,
 } = require('./lib/development-rendering.js');
 
@@ -396,6 +398,14 @@ function main(arguments_ = process.argv.slice(2)) {
     `Sitemap: ${baseUrl}/sitemap.xml`,
     '',
   ].join('\n'), CONTENT_TYPES['.txt']);
+
+  if (development) {
+    addRoute(
+      DEVELOPMENT_RUNTIME_PATH,
+      DEVELOPMENT_RUNTIME_SOURCE,
+      CONTENT_TYPES['.js'],
+    );
+  }
 
   const smallAssets = [
     'bundle.css',

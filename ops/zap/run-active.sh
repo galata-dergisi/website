@@ -3,6 +3,8 @@ set -eu
 
 target="${ZAP_TARGET:-http://app:3000}"
 active_target="${ZAP_ACTIVE_TARGET:-${target}/}"
+rule_config="${ZAP_RULE_CONFIG:-/zap/config/active.conf}"
+report_stem="${ZAP_REPORT_STEM:-zap-active-report}"
 spider_minutes="${ZAP_ACTIVE_SPIDER_MINUTES:-1}"
 timeout_minutes="${ZAP_ACTIVE_TIMEOUT_MINUTES:-10}"
 max_duration_minutes="${ZAP_ACTIVE_MAX_DURATION_MINUTES:-10}"
@@ -39,11 +41,12 @@ done
 
 exec zap-full-scan.py \
   -t "$active_target" \
-  -c /zap/config/active.conf \
+  -c "$rule_config" \
   -m "$spider_minutes" \
   -T "$timeout_minutes" \
   -j \
+  --hook /zap/config/media-exclusions.py \
   -z "-silent -config scanner.maxScanDurationInMins=${max_duration_minutes} -config scanner.maxRuleDurationInMins=${max_rule_duration_minutes}" \
-  -r zap-active-report.html \
-  -J zap-active-report.json \
-  -w zap-active-report.md
+  -r "${report_stem}.html" \
+  -J "${report_stem}.json" \
+  -w "${report_stem}.md"

@@ -482,10 +482,20 @@ test('nginx keeps tunnel-only slots, Access boundary, and media roots independen
   const dev = fs.readFileSync(
     path.join(repositoryRoot, 'ops/nginx/dev.galatadergisi.org.conf'), 'utf8',
   );
+  const securityHeaders = fs.readFileSync(
+    path.join(repositoryRoot, 'ops/nginx/galata-security-headers.conf'), 'utf8',
+  );
+  const productionCsp = fs.readFileSync(
+    path.join(repositoryRoot, 'ops/nginx/galata-production-csp.conf'), 'utf8',
+  );
+  const devCsp = fs.readFileSync(
+    path.join(repositoryRoot, 'ops/nginx/galata-dev-csp.conf'), 'utf8',
+  );
   const logrotate = fs.readFileSync(
     path.join(repositoryRoot, 'ops/logrotate/galata-nginx'), 'utf8',
   );
   const deploy = fs.readFileSync(deployScript, 'utf8');
+  const helper = fs.readFileSync(helperScript, 'utf8');
   assert.match(shared, /server 127\.0\.0\.1:3000/);
   assert.match(shared, /server 127\.0\.0\.1:3001/);
   assert.doesNotMatch(shared, /galata_from_cloudflare|173\.245\.48\.0\/20/);
@@ -501,12 +511,26 @@ test('nginx keeps tunnel-only slots, Access boundary, and media roots independen
   assert.match(dev, /proxy_set_header X-Forwarded-Proto https/);
   assert.match(production, /location = \/healthz[\s\S]*no-store/);
   assert.match(dev, /location = \/healthz[\s\S]*no-store/);
+  assert.match(securityHeaders, /Strict-Transport-Security/);
+  assert.match(securityHeaders, /X-Frame-Options/);
+  assert.match(securityHeaders, /X-Content-Type-Options/);
+  assert.match(productionCsp, /Content-Security-Policy-Report-Only/);
+  assert.match(devCsp, /Content-Security-Policy-Report-Only/);
+  assert.match(production, /galata-production-csp\.conf/);
+  assert.match(dev, /galata-dev-csp\.conf/);
+  for (const filename of [
+    'galata-security-headers.conf',
+    'galata-production-csp.conf',
+    'galata-dev-csp.conf',
+  ]) {
+    assert.match(deploy, new RegExp(`ops/nginx/${filename.replace('.', '\\.')}`));
+    assert.match(helper, new RegExp(`bundle/${filename.replace('.', '\\.')}`));
+  }
   assert.doesNotMatch(
     `${shared}\n${production}\n${dev}`,
     /galata_(?:dev_)?contribution|client_max_body_size 52m|proxy_request_buffering off/,
   );
   assert.doesNotMatch(`${shared}\n${production}\n${dev}`, /listen\s+(80|443|3000|3001)\b/);
-  const helper = fs.readFileSync(helperScript, 'utf8');
   assert.match(helper, /--header "Host: \$HOSTNAME" "http:\/\/127\.0\.0\.1:8080\/healthz"/);
   assert.match(logrotate, /^\s*daily\s*$/m);
   assert.match(logrotate, /^\s*rotate 30\s*$/m);

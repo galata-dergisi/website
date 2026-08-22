@@ -65,6 +65,7 @@ ready=false
 attempt=1
 while [ "$attempt" -le 60 ]; do
   if curl --silent --show-error --insecure --fail --max-time 3 \
+    --dump-header "$temporary_dir/health.headers" \
     "$base_url/healthz" >"$temporary_dir/health.json" 2>/dev/null
   then
     ready=true
@@ -91,6 +92,29 @@ assert_file_contains "$temporary_dir/home.headers" \
 assert_file_contains "$temporary_dir/home.headers" \
   'X-Frame-Options: SAMEORIGIN' \
   "frame protection header is missing"
+assert_file_contains "$temporary_dir/home.headers" \
+  'X-Content-Type-Options: nosniff' \
+  "content-type protection header is missing"
+expected_csp=$(sed -n \
+  's/^add_header Content-Security-Policy-Report-Only "\(.*\)" always;$/\1/p' \
+  "$repo_root/ops/nginx/galata-production-csp.conf")
+actual_csp=$(awk '
+  tolower($1) == "content-security-policy-report-only:" {
+    sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit
+  }
+' "$temporary_dir/home.headers")
+if [ -z "$expected_csp" ] || [ "$actual_csp" != "$expected_csp" ]; then
+  fail "report-only CSP header does not match the deployed production policy"
+fi
+if grep -i '^Content-Security-Policy:' "$temporary_dir/home.headers" >/dev/null; then
+  fail "production CSP was enforced before manual dev acceptance"
+fi
+assert_file_contains "$temporary_dir/health.headers" \
+  'Strict-Transport-Security: max-age=63072000' \
+  "health response lost inherited security headers"
+assert_file_contains "$temporary_dir/health.headers" \
+  'Content-Security-Policy-Report-Only:' \
+  "health response lost the report-only CSP header"
 assert_file_contains "$temporary_dir/home.html" \
   'rel="canonical" href="https://galatadergisi.org/' \
   "production canonical URL is missing"
@@ -131,6 +155,12 @@ curl --silent --show-error --insecure --max-time 10 \
   --output /dev/null "$audio_url"
 assert_file_contains "$temporary_dir/audio-head.headers" 'Accept-Ranges: bytes' \
   "nginx audio Accept-Ranges header is missing"
+assert_file_contains "$temporary_dir/audio-head.headers" \
+  'X-Content-Type-Options: nosniff' \
+  "nginx audio response lost centralized security headers"
+assert_file_contains "$temporary_dir/audio-head.headers" \
+  'Content-Security-Policy-Report-Only:' \
+  "nginx audio response lost the report-only CSP header"
 audio_size=$(awk 'tolower($1) == "content-length:" { sub(/\r$/, "", $2); print $2; exit }' \
   "$temporary_dir/audio-head.headers")
 if [ -z "$audio_size" ] || [ "$audio_size" -le 16 ]; then

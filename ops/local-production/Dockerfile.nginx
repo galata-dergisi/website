@@ -12,6 +12,8 @@ RUN apk add --no-cache openssl \
 # Start from the tunnel-oriented production virtual host. The preview replaces
 # the hostname and loopback HTTP listener, then adds preview-only TLS.
 COPY ops/nginx/galata-shared.conf /etc/nginx/conf.d/00-galata-shared.conf
+COPY ops/nginx/galata-security-headers.conf /etc/nginx/snippets/galata-security-headers.conf
+COPY ops/nginx/galata-production-csp.conf /etc/nginx/snippets/galata-production-csp.conf
 COPY ops/nginx/galatadergisi.org.conf /etc/nginx/conf.d/galatadergisi.org.conf
 COPY ops/local-production/preview-tls.conf /etc/nginx/snippets/galata-preview-tls.conf
 

@@ -56,6 +56,11 @@ Development reads the port from `LISTEN_ADDR`, which must use
 paths are resolved from the repository root. Other values are passed to child
 processes.
 
+Direct local development does not add CSP response headers. Its refresh client
+is nevertheless served as the stable same-origin `/__dev/runtime.js` asset and
+reads the current generation token from non-executable JSON. The deployed
+`dev.galatadergisi.org` nginx vhost owns its independently staged CSP header.
+
 The same `.env.example` is the starting point for `.env.production`. Remove or
 edit values that do not apply to the selected mode. Both local mode files are
 ignored by Git, and none of the env files enter Docker build contexts.

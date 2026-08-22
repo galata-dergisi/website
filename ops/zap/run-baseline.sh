@@ -2,6 +2,8 @@
 set -eu
 
 target="${ZAP_TARGET:-http://app:3000}"
+rule_config="${ZAP_RULE_CONFIG:-/zap/config/baseline.conf}"
+report_stem="${ZAP_REPORT_STEM:-zap-report}"
 attempt=1
 max_attempts=60
 
@@ -16,12 +18,13 @@ done
 
 exec zap-baseline.py \
   -t "$target" \
-  -c /zap/config/baseline.conf \
+  -c "$rule_config" \
   -m "${ZAP_SPIDER_MINUTES:-1}" \
   -T "${ZAP_TIMEOUT_MINUTES:-10}" \
   -i \
   -I \
+  --hook /zap/config/media-exclusions.py \
   -z "-silent" \
-  -r zap-report.html \
-  -J zap-report.json \
-  -w zap-report.md
+  -r "${report_stem}.html" \
+  -J "${report_stem}.json" \
+  -w "${report_stem}.md"

@@ -33,6 +33,15 @@ const productionNginxPath = path.join(
 );
 const sharedNginxPath = path.join(repoRoot, 'ops/nginx/galata-shared.conf');
 const devNginxPath = path.join(repoRoot, 'ops/nginx/dev.galatadergisi.org.conf');
+const securityHeadersPath = path.join(
+  repoRoot,
+  'ops/nginx/galata-security-headers.conf',
+);
+const productionCspPath = path.join(
+  repoRoot,
+  'ops/nginx/galata-production-csp.conf',
+);
+const devCspPath = path.join(repoRoot, 'ops/nginx/galata-dev-csp.conf');
 const nginxLogrotatePath = path.join(repoRoot, 'ops/logrotate/galata-nginx');
 const serverSetupPath = path.join(repoRoot, 'ops/setup-server.sh');
 const productionServerPath = path.join(repoRoot, 'cmd/galata-server/main.go');
@@ -134,10 +143,20 @@ tracked.filter((filename) => (
   });
 });
 
-if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
+if (
+  !fs.existsSync(productionNginxPath)
+  || !fs.existsSync(sharedNginxPath)
+  || !fs.existsSync(securityHeadersPath)
+  || !fs.existsSync(productionCspPath)
+) {
   failures.push('production nginx configuration is missing');
 } else {
-  const productionNginx = `${fs.readFileSync(sharedNginxPath, 'utf8')}\n${fs.readFileSync(productionNginxPath, 'utf8')}`;
+  const productionNginx = [
+    sharedNginxPath,
+    securityHeadersPath,
+    productionCspPath,
+    productionNginxPath,
+  ].map((filename) => fs.readFileSync(filename, 'utf8')).join('\n');
   [
     {
       label: 'loopback Go upstream',
@@ -170,6 +189,14 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
     {
       label: 'disabled nginx access logging',
       pattern: /^\s*access_log off;\s*$/m,
+    },
+    {
+      label: 'centralized security headers',
+      pattern: /include \/etc\/nginx\/snippets\/galata-security-headers\.conf;/,
+    },
+    {
+      label: 'report-only production CSP',
+      pattern: /add_header Content-Security-Policy-Report-Only "default-src 'none';/,
     },
     {
       label: 'stripped Cloudflare visitor address',
@@ -239,12 +266,14 @@ if (!fs.existsSync(productionNginxPath) || !fs.existsSync(sharedNginxPath)) {
   });
 }
 
-if (!fs.existsSync(devNginxPath)) {
+if (!fs.existsSync(devNginxPath) || !fs.existsSync(devCspPath)) {
   failures.push('dev nginx configuration is missing');
 } else {
   const devNginx = fs.readFileSync(devNginxPath, 'utf8');
   const devBoundary = fs.existsSync(sharedNginxPath)
-    ? `${fs.readFileSync(sharedNginxPath, 'utf8')}\n${devNginx}`
+    ? [sharedNginxPath, securityHeadersPath, devCspPath]
+      .map((filename) => fs.readFileSync(filename, 'utf8'))
+      .concat(devNginx).join('\n')
     : devNginx;
   [
     [/server_name dev\.galatadergisi\.org;/, 'exact dev hostname'],
@@ -254,8 +283,10 @@ if (!fs.existsSync(devNginxPath)) {
     [/\/var\/www\/dev\.galatadergisi\.org\/public/, 'isolated dev media root'],
     [/listen 127\.0\.0\.1:8080;/, 'loopback Cloudflare Tunnel origin listener'],
     [/location = \/healthz \{[\s\S]*Cache-Control "no-store, no-cache, must-revalidate"/, 'non-cacheable dev health'],
+    [/include \/etc\/nginx\/snippets\/galata-dev-csp\.conf;/, 'dev CSP include'],
+    [/Content-Security-Policy-Report-Only "default-src 'none';/, 'report-only dev CSP'],
   ].forEach(([pattern, label]) => {
-    if (!pattern.test(devNginx)) failures.push(`dev nginx configuration lacks ${label}`);
+    if (!pattern.test(devBoundary)) failures.push(`dev nginx configuration lacks ${label}`);
   });
   if (/\bauth_basic\b/.test(devBoundary)) {
     failures.push('dev nginx configuration contains origin basic authentication');

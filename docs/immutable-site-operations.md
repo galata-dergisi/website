@@ -28,20 +28,33 @@ use ports `3000` and `3001`. Docker must be running.
 
 ## OWASP ZAP scans
 
-Docker can build and exercise the production Go application without starting
-the watched development runtime:
+Docker can build and exercise the production nginx-to-Go boundary without
+starting the watched development runtime:
 
 ```sh
 npm run security:zap
 npm run security:zap:active
+npm run security:zap:origin
+npm run security:zap:active:origin
 ```
 
 The harness runs the official OWASP ZAP baseline and bounded active scans on an
 isolated Docker network and writes HTML, JSON, and Markdown results to the
-ignored `zap-reports/` directory. The baseline performs passive analysis only;
-the explicit active command sends attack payloads to the containerized target.
+ignored `zap-reports/` directory. The first two commands are the primary nginx
+scans; the latter two are explicit direct-origin diagnostics. The baseline
+performs passive analysis only; active commands send attack payloads to the
+containerized target. Externally deployed magazine images and audio are
+excluded and the sibling media repository is not required.
 See [`ops/zap/README.md`](../ops/zap/README.md) for rule policy, scope, and
 timeout overrides.
+
+Both deployed vhosts currently ship their exact CSP as
+`Content-Security-Policy-Report-Only`. Before enforcing it, inspect the browser
+console through Cloudflare Access on `dev.galatadergisi.org` for the homepage,
+`/dergiler/sayi45/34`, `/katkida-bulunanlar/15-nafizcan-onder`, and a reader
+route with audio interaction. Enforce the dev include first and repeat those
+checks. Only then enforce the production include and promote ZAP rule 10038 to
+`FAIL`. Do not add a report collector or public write endpoint.
 
 To prove the complete browser/SSR/site build is deterministic, compare the
 sorted file-hash stream from two builds:

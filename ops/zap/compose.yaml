@@ -7,7 +7,7 @@ services:
       dockerfile: ops/zap/Dockerfile
       target: scan-target
     environment:
-      LISTEN_ADDR: 0.0.0.0:3000
+      LISTEN_ADDR: ${ZAP_APP_LISTEN_ADDR:-127.0.0.1:3000}
     read_only: true
     cap_drop:
       - ALL
@@ -16,7 +16,26 @@ services:
     logging:
       driver: none
     networks:
-      - scan
+      scan:
+        aliases:
+          - galatadergisi.org
+
+  nginx:
+    build:
+      context: ../..
+      dockerfile: ops/zap/Dockerfile.nginx
+    depends_on:
+      app:
+        condition: service_started
+    network_mode: service:app
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: none
 
   zap:
     image: ${ZAP_IMAGE:-ghcr.io/zaproxy/zaproxy:stable}
@@ -29,17 +48,15 @@ services:
       - sh
       - /zap/config/run-baseline.sh
     environment:
+      ZAP_REPORT_STEM: ${ZAP_REPORT_STEM:-zap-report}
+      ZAP_RULE_CONFIG: ${ZAP_RULE_CONFIG:-/zap/config/baseline.conf}
       ZAP_SPIDER_MINUTES: ${ZAP_SPIDER_MINUTES:-1}
-      ZAP_TARGET: http://app:3000
+      ZAP_TARGET: ${ZAP_TARGET:-http://galatadergisi.org:8080}
       ZAP_TIMEOUT_MINUTES: ${ZAP_TIMEOUT_MINUTES:-10}
     volumes:
       - type: bind
-        source: ./baseline.conf
-        target: /zap/config/baseline.conf
-        read_only: true
-      - type: bind
-        source: ./run-baseline.sh
-        target: /zap/config/run-baseline.sh
+        source: .
+        target: /zap/config
         read_only: true
       - type: bind
         source: ../../zap-reports
@@ -68,17 +85,15 @@ services:
       ZAP_ACTIVE_MAX_DURATION_MINUTES: ${ZAP_ACTIVE_MAX_DURATION_MINUTES:-10}
       ZAP_ACTIVE_MAX_RULE_DURATION_MINUTES: ${ZAP_ACTIVE_MAX_RULE_DURATION_MINUTES:-2}
       ZAP_ACTIVE_SPIDER_MINUTES: ${ZAP_ACTIVE_SPIDER_MINUTES:-1}
-      ZAP_ACTIVE_TARGET: ${ZAP_ACTIVE_TARGET:-http://app:3000/}
+      ZAP_ACTIVE_TARGET: ${ZAP_ACTIVE_TARGET:-http://galatadergisi.org:8080/}
       ZAP_ACTIVE_TIMEOUT_MINUTES: ${ZAP_ACTIVE_TIMEOUT_MINUTES:-10}
-      ZAP_TARGET: http://app:3000
+      ZAP_REPORT_STEM: ${ZAP_REPORT_STEM:-zap-active-report}
+      ZAP_RULE_CONFIG: ${ZAP_RULE_CONFIG:-/zap/config/active.conf}
+      ZAP_TARGET: ${ZAP_TARGET:-http://galatadergisi.org:8080}
     volumes:
       - type: bind
-        source: ./active.conf
-        target: /zap/config/active.conf
-        read_only: true
-      - type: bind
-        source: ./run-active.sh
-        target: /zap/config/run-active.sh
+        source: .
+        target: /zap/config
         read_only: true
       - type: bind
         source: ../../zap-reports

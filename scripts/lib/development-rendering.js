@@ -3,51 +3,80 @@
 // Development-only HTML changes. Production generation never calls this
 // module's transform, keeping release documents byte-for-byte unchanged.
 
+const DEVELOPMENT_RUNTIME_PATH = '/__dev/runtime.js';
+
+// Keep this asset independent of the generation token so the deployed dev
+// vhost can authorize it with a stable same-origin CSP source.
+const DEVELOPMENT_RUNTIME_SOURCE = `
+(function galataDevelopmentRuntime() {
+  'use strict';
+
+  var configurationElement = document.getElementById('galata-development-config');
+  if (!configurationElement) return;
+
+  var configuration;
+  try {
+    configuration = JSON.parse(configurationElement.textContent);
+  } catch (error) {
+    return;
+  }
+
+  var expectedGeneration = configuration.generation;
+  var observedServer = null;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then(function (registrations) {
+        return Promise.all(registrations.map(function (registration) {
+          return registration.unregister();
+        }));
+      })
+      .catch(function () {});
+  }
+  if ('caches' in window) {
+    caches.keys()
+      .then(function (names) {
+        return Promise.all(names
+          .filter(function (name) { return name.indexOf('galatadergisi-') === 0; })
+          .map(function (name) { return caches.delete(name); }));
+      })
+      .catch(function () {});
+  }
+  window.setInterval(function () {
+    fetch('/__dev/status', { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('development status unavailable');
+        return response.json();
+      })
+      .then(function (status) {
+        if (status.generation !== expectedGeneration) {
+          window.location.reload();
+          return;
+        }
+        if (observedServer === null) {
+          observedServer = status.server;
+        } else if (status.server !== observedServer) {
+          window.location.reload();
+        }
+      })
+      .catch(function () {});
+  }, 750);
+}());
+`.trimStart();
+
+function jsonForHtml(value) {
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (character) => ({
+    '<': '\\u003c',
+    '>': '\\u003e',
+    '&': '\\u0026',
+    '\u2028': '\\u2028',
+    '\u2029': '\\u2029',
+  }[character]));
+}
+
 function developmentClient(generationToken) {
-  const generation = JSON.stringify(generationToken).replace(/</g, '\\u003c');
-  return `<script>
-      (function galataDevelopmentRuntime() {
-        var expectedGeneration = ${generation};
-        var observedServer = null;
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations()
-            .then(function (registrations) {
-              return Promise.all(registrations.map(function (registration) {
-                return registration.unregister();
-              }));
-            })
-            .catch(function () {});
-        }
-        if ('caches' in window) {
-          caches.keys()
-            .then(function (names) {
-              return Promise.all(names
-                .filter(function (name) { return name.indexOf('galatadergisi-') === 0; })
-                .map(function (name) { return caches.delete(name); }));
-            })
-            .catch(function () {});
-        }
-        window.setInterval(function () {
-          fetch('/__dev/status', { cache: 'no-store' })
-            .then(function (response) {
-              if (!response.ok) throw new Error('development status unavailable');
-              return response.json();
-            })
-            .then(function (status) {
-              if (status.generation !== expectedGeneration) {
-                window.location.reload();
-                return;
-              }
-              if (observedServer === null) {
-                observedServer = status.server;
-              } else if (status.server !== observedServer) {
-                window.location.reload();
-              }
-            })
-            .catch(function () {});
-        }, 750);
-      }());
-    </script>`;
+  const configuration = jsonForHtml({ generation: generationToken });
+  return `<script id="galata-development-config" type="application/json">${configuration}</script>
+    <script src="${DEVELOPMENT_RUNTIME_PATH}" defer></script>`;
 }
 
 function renderDevelopmentDocument(source, generationToken) {
@@ -78,6 +107,8 @@ function renderDevelopmentDocument(source, generationToken) {
 }
 
 module.exports = {
+  DEVELOPMENT_RUNTIME_PATH,
+  DEVELOPMENT_RUNTIME_SOURCE,
   developmentClient,
   renderDevelopmentDocument,
 };

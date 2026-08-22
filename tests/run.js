@@ -29,6 +29,8 @@ const SeoRenderer = require('../scripts/lib/seo-renderer.js');
 const { renderAtomFeed } = require('../scripts/lib/atom-feed.js');
 const { renderSitemap } = require('../scripts/lib/sitemap.js');
 const {
+  DEVELOPMENT_RUNTIME_PATH,
+  DEVELOPMENT_RUNTIME_SOURCE,
   renderDevelopmentDocument,
 } = require('../scripts/lib/development-rendering.js');
 const {
@@ -201,10 +203,14 @@ test('adds isolated development rendering without changing production templates'
   </head><body></body></html>`;
   const rendered = renderDevelopmentDocument(source, 'generation-test');
   assert.match(rendered, /name="robots" content="noindex, nofollow"/);
-  assert.match(rendered, /galataDevelopmentRuntime/);
+  assert.match(rendered, /id="galata-development-config" type="application\/json"/);
   assert.match(rendered, /generation-test/);
-  assert.match(rendered, /\/__dev\/status/);
-  assert.match(rendered, /status\.server !== observedServer/);
+  assert.match(rendered, /src="\/__dev\/runtime\.js" defer/);
+  assert.doesNotMatch(rendered, /galataDevelopmentRuntime|\/__dev\/status/);
+  assert.strictEqual(DEVELOPMENT_RUNTIME_PATH, '/__dev/runtime.js');
+  assert.match(DEVELOPMENT_RUNTIME_SOURCE, /galataDevelopmentRuntime/);
+  assert.match(DEVELOPMENT_RUNTIME_SOURCE, /\/__dev\/status/);
+  assert.match(DEVELOPMENT_RUNTIME_SOURCE, /status\.server !== observedServer/);
   assert.doesNotMatch(
     rendered,
     /googletagmanager|serviceWorker\.register\(/,
@@ -2091,6 +2097,7 @@ test('uses npm without Yarn, PnP, or a committed package cache', () => {
       assert.ok(!fs.existsSync(path.join(__dirname, '..', filename)));
     });
   assert.match(dockerfile, /COPY package\.json package-lock\.json/);
+  assert.match(dockerfile, /COPY ops\/nginx\/ ops\/nginx\//);
   assert.match(dockerfile, /RUN npm ci/);
   assert.doesNotMatch(dockerfile, /\byarn\b|corepack|\.pnp/i);
 });
@@ -2175,6 +2182,8 @@ test('keeps the local production preview on the production runtime boundary', ()
     nginxDockerfile,
     /COPY ops\/nginx\/galatadergisi\.org\.conf/,
   );
+  assert.match(nginxDockerfile, /COPY ops\/nginx\/galata-security-headers\.conf/);
+  assert.match(nginxDockerfile, /COPY ops\/nginx\/galata-production-csp\.conf/);
   assert.match(nginxDockerfile, /server_name localhost/);
   assert.match(nginxDockerfile, /nginx -t/);
   assert.doesNotMatch(nginxDockerfile, /access\.log/);
@@ -2183,6 +2192,8 @@ test('keeps the local production preview on the production runtime boundary', ()
   assert.match(smokeSource, /assert_status 304/);
   assert.match(smokeSource, /assert_status 206/);
   assert.match(smokeSource, /Content-Type: audio\/mpeg/);
+  assert.match(smokeSource, /report-only CSP header does not match/);
+  assert.match(smokeSource, /audio response lost centralized security headers/);
   assert.match(smokeSource, /retired contribution endpoint/);
   assert.match(smokeSource, /nginx emitted an access log record/);
   assert.match(previewSource, /env_file="\$repo_root\/\.env\.production"/);

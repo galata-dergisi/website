@@ -421,6 +421,7 @@ configure() {
   [ "${SUDO_USER:-root}" != galata-deploy ] || die "deployment identity cannot configure the host"
   bundle=$1
   for file in deploy-key.pub production.env dev.env galata-shared.conf \
+      galata-security-headers.conf galata-production-csp.conf galata-dev-csp.conf \
       galatadergisi.org.conf dev.galatadergisi.org.conf galata-nginx \
       galata-server.service galata-dev-server.service cloudflared.service; do
     [ -f "$bundle/$file" ] && [ ! -L "$bundle/$file" ] || die "configuration bundle lacks $file"
@@ -460,11 +461,14 @@ configure() {
   install -d -m 0755 -o root -g root "$DEPLOY_ROOT/history" "$DEPLOY_ROOT/cache-purge-pending"
   install -d -m 0700 -o root -g root "$PROCESS_ROOT"
   install -d -m 0750 -o root -g www-data /var/www/galatadergisi.org /var/www/dev.galatadergisi.org
-  install -d -m 0755 -o root -g root /etc/nginx/sites-available \
+  install -d -m 0755 -o root -g root /etc/nginx/sites-available /etc/nginx/snippets \
     /var/log/nginx/galatadergisi.org /var/log/nginx/dev.galatadergisi.org
   install -m 0600 -o root -g root "$bundle/production.env" /etc/galata/production.env
   install -m 0600 -o root -g root "$bundle/dev.env" /etc/galata/dev.env
   install -m 0644 -o root -g root "$bundle/galata-shared.conf" /etc/nginx/conf.d/galata-shared.conf
+  install -m 0644 -o root -g root "$bundle/galata-security-headers.conf" /etc/nginx/snippets/galata-security-headers.conf
+  install -m 0644 -o root -g root "$bundle/galata-production-csp.conf" /etc/nginx/snippets/galata-production-csp.conf
+  install -m 0644 -o root -g root "$bundle/galata-dev-csp.conf" /etc/nginx/snippets/galata-dev-csp.conf
   install -m 0644 -o root -g root "$bundle/galatadergisi.org.conf" /etc/nginx/sites-available/galatadergisi.org.conf
   install -m 0644 -o root -g root "$bundle/dev.galatadergisi.org.conf" /etc/nginx/sites-available/dev.galatadergisi.org.conf
   install -m 0644 -o root -g root "$bundle/galata-nginx" "$NGINX_LOGROTATE_POLICY"
