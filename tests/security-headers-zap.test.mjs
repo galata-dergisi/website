@@ -79,6 +79,7 @@ test('primary ZAP commands traverse isolated production nginx', () => {
   const packageJson = JSON.parse(read('package.json'));
   const compose = read('ops/zap/compose.yaml');
   const runner = read('scripts/zap-scan.sh');
+  const appDockerfile = read('ops/zap/Dockerfile');
   const nginxDockerfile = read('ops/zap/Dockerfile.nginx');
 
   assert.equal(packageJson.scripts['security:zap'], 'sh scripts/zap-scan.sh');
@@ -97,6 +98,18 @@ test('primary ZAP commands traverse isolated production nginx', () => {
   assert.match(compose, /aliases:\s*\n\s*- galatadergisi\.org/);
   assert.match(compose, /network_mode: service:app/);
   assert.doesNotMatch(compose, /^\s*ports:/m);
+  assert.match(
+    compose,
+    /galata_static_images: \$\{GALATA_MEDIA_ROOT:-[^}]+\}\/images/,
+  );
+  assert.match(
+    appDockerfile,
+    /--mount=type=bind,from=galata_static_images,target=\/galata-static-images,readonly/,
+  );
+  assert.match(
+    appDockerfile,
+    /GALATA_STATIC_ASSETS_ROOT=\/galata-static-images npm run build/,
+  );
   assert.match(runner, /ZAP_TARGET=http:\/\/galatadergisi\.org:8080/);
   assert.match(runner, /ZAP_TARGET=http:\/\/app:3000/);
   assert.match(runner, /ZAP_APP_LISTEN_ADDR=127\.0\.0\.1:3000/);
@@ -232,6 +245,10 @@ test('Docker preview enforces and browser-tests both deployed CSP variants', () 
   assert.match(
     compose,
     /GALATA_PREVIEW_ENFORCE_CSP: \$\{GALATA_PREVIEW_ENFORCE_CSP:-0\}/,
+  );
+  assert.match(
+    compose,
+    /galata_static_images: \$\{GALATA_MEDIA_ROOT:-[^}]+\}\/images/,
   );
   assert.match(compose, /profiles:\s*\n\s*- csp/);
   assert.match(compose, /dockerfile: ops\/local-production\/Dockerfile\.browser/);

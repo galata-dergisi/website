@@ -36,10 +36,12 @@ generated-site verifier enforces the complete policy, rejects executable inline
 blocks, and permits only the tracked same-origin assets extracted from reviewed
 legacy content.
 
-The shared scan hook excludes `/images/sayiN/` and
-`/magazines/sayiN/audio/` from both spidering and active attacks. Those payloads
-belong to the separately deployed media repository, which is neither mounted
-nor required by this harness.
+The app-image build reads the issue thumbnails from the separately deployed
+media repository through a read-only BuildKit context so it can generate the
+embedded homepage assets. The resulting image does not contain that source
+media. At runtime, the shared scan hook excludes `/images/sayiN/` and
+`/magazines/sayiN/audio/` from both spidering and active attacks; the media
+repository is not mounted into the scan target.
 
 The official stable ZAP image is used by default. Scanner and timeout limits
 can be overridden without changing the target boundary:

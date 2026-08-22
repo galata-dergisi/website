@@ -6,6 +6,8 @@ services:
       context: ../..
       dockerfile: ops/zap/Dockerfile
       target: scan-target
+      additional_contexts:
+        galata_static_images: ${GALATA_MEDIA_ROOT:-../../../galata-dergisi-static-assets/server-assets/public}/images
     environment:
       LISTEN_ADDR: 127.0.0.1:3000
     read_only: true

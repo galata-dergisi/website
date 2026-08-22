@@ -97,8 +97,10 @@ The preview inherits the production access-log disable. Nginx errors go only
 to container stderr and are removed with the preview container; it does not
 create the persistent VPS error-log files or use their logrotate policy.
 
-The preview mounts the sibling production media checkout read-only at nginx's
-production media path. Use an absolute alternate path or port when needed:
+The preview gives the app-image build read-only access to the media checkout's
+`images` directory for homepage asset generation, then mounts the complete
+checkout read-only at nginx's production media path. The source media is not
+copied into the app image. Use an absolute alternate path or port when needed:
 
 ```sh
 GALATA_MEDIA_ROOT=/absolute/path/to/server-assets/public \

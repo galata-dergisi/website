@@ -16,7 +16,8 @@ COPY ops/nginx/ ops/nginx/
 COPY scripts/ scripts/
 COPY postcss.config.mjs svelte.config.mjs ./
 
-RUN npm run build \
+RUN --mount=type=bind,from=galata_static_images,target=/galata-static-images,readonly \
+    GALATA_STATIC_ASSETS_ROOT=/galata-static-images npm run build \
     && npm run verify:site
 
 FROM golang:1.26.5-alpine AS server-builder
