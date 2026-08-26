@@ -431,6 +431,7 @@ function main(arguments_ = process.argv.slice(2)) {
     'fonts/akaDora.woff2',
     'images/carousel-thumbnail-placeholders.webp',
     'images/bant.jpg',
+    'images/bimi.svg',
     'images/favicon.png',
     'images/first-shelf.png',
     'images/header-logo.jpg',
