@@ -20,7 +20,7 @@ RUN --mount=type=bind,from=galata_static_images,target=/galata-static-images,rea
     GALATA_STATIC_ASSETS_ROOT=/galata-static-images npm run build \
     && npm run verify:site
 
-FROM golang:1.26.5-alpine AS server-builder
+FROM golang:1.27.0-alpine AS server-builder
 
 WORKDIR /src
 

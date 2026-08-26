@@ -118,7 +118,7 @@ requires the build, deployment, and relevant acceptance checks again.
 
 ## 4. Reproduce the complete local gate
 
-Use the repository-pinned Node 24.18.0 and Go 1.26.5 versions. The sibling
+Use the repository-pinned Node 24.18.0 and Go 1.27.0 versions. The sibling
 static-assets checkout must be clean.
 
 ```sh

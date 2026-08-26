@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.26.5-alpine AS fixture-builder
+FROM golang:1.27.0-alpine AS fixture-builder
 
 WORKDIR /src
 
