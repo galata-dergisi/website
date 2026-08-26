@@ -8,7 +8,7 @@ catalog, and reviewed count baseline.
 Current reviewed SHA-256:
 
 ```text
-bde5aad0e475d045b4a6fa25cf1c7951f5c83cd99075878066716286c64858ad
+df6b3ce281ba5149bf6a2d62b0f26390207d6e8ceb132bda4724b91fd6889d49
 ```
 
 Schema version 2 stores publication instants as explicit RFC 3339 UTC values.
