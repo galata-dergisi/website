@@ -2,7 +2,14 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -169,15 +176,23 @@ function startFixtureServer() {
 }
 
 function launchChrome() {
-  const profile = path.join(tmpdir(), `galata-page-turn-${process.pid}-${Date.now()}`);
+  const profile = mkdtempSync(path.join(tmpdir(), 'galata-page-turn-chrome-'));
+  const devToolsActivePortPath = path.join(profile, 'DevToolsActivePort');
   const chrome = spawn(findChrome(), [
     '--headless=new',
     '--no-sandbox',
     '--disable-gpu',
+    '--disable-dev-shm-usage',
+    '--disable-background-networking',
+    '--disable-default-apps',
+    '--disable-extensions',
+    '--disable-sync',
     '--hide-scrollbars',
     '--force-color-profile=srgb',
     '--force-device-scale-factor=1',
     '--font-render-hinting=none',
+    '--no-first-run',
+    '--no-default-browser-check',
     '--remote-debugging-port=0',
     `--user-data-dir=${profile}`,
     '--window-size=1200,800',
@@ -186,20 +201,45 @@ function launchChrome() {
 
   const websocketURL = new Promise((resolve, reject) => {
     let stderr = '';
-    const timeout = setTimeout(() => reject(new Error(`Chrome DevTools endpoint timed out\n${stderr}`)), 15_000);
+    let settled = false;
+    let markerPoll;
+    let timeout;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(markerPoll);
+      clearTimeout(timeout);
+      callback(value);
+    };
+    const readDevToolsMarker = () => {
+      if (!existsSync(devToolsActivePortPath)) return;
+      const [port, endpointPath] = readFileSync(devToolsActivePortPath, 'utf8')
+        .trim()
+        .split(/\r?\n/);
+      if (/^\d+$/.test(port) && endpointPath?.startsWith('/')) {
+        settle(resolve, `ws://127.0.0.1:${port}${endpointPath}`);
+      }
+    };
+
     chrome.stderr.setEncoding('utf8');
     chrome.stderr.on('data', (chunk) => {
-      stderr += chunk;
+      stderr = `${stderr}${chunk}`.slice(-20_000);
       const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
       if (match) {
-        clearTimeout(timeout);
-        resolve(match[1]);
+        settle(resolve, match[1]);
       }
     });
-    chrome.once('exit', (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Chrome exited before DevTools was ready (${code})\n${stderr}`));
+    chrome.once('error', (error) => {
+      settle(reject, new Error(`Chrome failed to start: ${error.message}\n${stderr}`));
     });
+    chrome.once('exit', (code) => {
+      settle(reject, new Error(`Chrome exited before DevTools was ready (${code})\n${stderr}`));
+    });
+    markerPoll = setInterval(readDevToolsMarker, 25);
+    timeout = setTimeout(() => {
+      settle(reject, new Error(`Chrome DevTools endpoint timed out\n${stderr}`));
+    }, 30_000);
+    readDevToolsMarker();
   });
 
   return {
@@ -209,12 +249,38 @@ function launchChrome() {
     async close() {
       if (chrome.exitCode === null) {
         const exited = new Promise((resolve) => chrome.once('exit', resolve));
+        let killTimeout;
         chrome.kill('SIGTERM');
-        await exited;
+        await Promise.race([
+          exited,
+          new Promise((resolve) => {
+            killTimeout = setTimeout(resolve, 5_000);
+          }),
+        ]);
+        clearTimeout(killTimeout);
+        if (chrome.exitCode === null) {
+          chrome.kill('SIGKILL');
+          await exited;
+        }
       }
       rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     },
   };
+}
+
+async function launchReadyChrome() {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const browser = launchChrome();
+    try {
+      const websocketURL = await browser.websocketURL;
+      return { ...browser, websocketURL };
+    } catch (error) {
+      await browser.close();
+      if (attempt === 2) throw error;
+      process.stderr.write(`Chrome startup attempt ${attempt} failed; retrying.\n${error.message}\n`);
+    }
+  }
+  throw new Error('Chrome failed to start');
 }
 
 class DevToolsClient {
@@ -887,11 +953,12 @@ async function runAudioViewLifecycle(client, sessionId, url) {
 }
 
 const fixture = await startFixtureServer();
-const browser = launchChrome();
+let browser;
 let client;
 
 try {
-  client = await DevToolsClient.connect(await browser.websocketURL);
+  browser = await launchReadyChrome();
+  client = await DevToolsClient.connect(browser.websocketURL);
   const { targetId } = await client.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await client.send('Target.attachToTarget', { targetId, flatten: true });
   await client.send('Page.enable', {}, sessionId);
@@ -910,6 +977,6 @@ try {
   console.log('PageTurn browser parity checks passed.');
 } finally {
   client?.close();
-  await browser.close();
+  await browser?.close();
   await new Promise((resolve) => fixture.server.close(resolve));
 }
