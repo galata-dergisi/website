@@ -12,6 +12,7 @@ const {
   extractRecitations,
   extractTitledPageVisual,
   extractTocEntries,
+  getContributorAliases,
   isBackCoverPage,
   normalizeText,
   slugify,
@@ -2314,19 +2315,10 @@ test('resolves explicit contributor aliases to one canonical public identity', (
     canonicalizeContributorName('Belif Yüksel'),
     'Büşra Elif Yüksel',
   );
-  assert.strictEqual(canonicalizeContributorName('Defne Hadis'), 'Defne Hadiş');
   assert.strictEqual(canonicalizeContributorName('semihbnw'), 'Semih Bozkurt');
-  assert.strictEqual(
-    canonicalizeContributorName('oğuzhan Yeşiltuna'),
-    'Oğuzhan Yeşiltuna',
-  );
   assert.strictEqual(
     canonicalizeContributorName('Hikmet Zeynep Kazu'),
     'Zeynep Kazu',
-  );
-  assert.strictEqual(
-    canonicalizeContributorName('Eminenur Kızıldağ'),
-    'Emine Nur Kızıldağ',
   );
   assert.strictEqual(
     canonicalizeContributorName('Mehtap Kılıç (Aziza La’R Kuğu)'),
@@ -2344,10 +2336,6 @@ test('resolves explicit contributor aliases to one canonical public identity', (
     canonicalizeContributorName('Küsuratsız Pi'),
     'Suat Gürbüz',
   );
-  assert.strictEqual(
-    canonicalizeContributorName('Fundan Yaramış'),
-    'Funda Yaramış',
-  );
   const recitations = extractRecitations(`
     <input name="player_songs" size="1" id="Bir Şiir"
       value="Belif Yüksel" class="/audio/belif.mp3" />
@@ -2361,6 +2349,33 @@ test('resolves explicit contributor aliases to one canonical public identity', (
     recitations[0].warnings.some((warning) => warning.startsWith('Player credit')),
     false,
   );
+});
+
+test('keeps retired contributor typos out of content and aliases', () => {
+  const retiredNames = [
+    'Defne Hadis',
+    'oğuzhan Yeşiltuna',
+    'Eminenur Kızıldağ',
+    'Fundan Yaramış',
+  ];
+  const aliases = new Set(getContributorAliases().map((entry) => entry.alias));
+  const reader = openReadOnly(path.join(__dirname, '../content/public.sqlite'));
+
+  try {
+    retiredNames.forEach((name) => {
+      assert.strictEqual(aliases.has(name), false);
+      assert.strictEqual(canonicalizeContributorName(name), name);
+      assert.strictEqual(
+        reader.get(
+          'SELECT COUNT(*) AS matches FROM pages WHERE instr(content, ?) > 0',
+          name,
+        ).matches,
+        0,
+      );
+    });
+  } finally {
+    reader.close();
+  }
 });
 
 test('extracts crawlable work starts from issue contents', () => {
@@ -2416,7 +2431,7 @@ test('extracts strict page-level visual credits and full-size images', () => {
   const prefixed = extractPageVisual(`
     <img class="mIcResim" src="/images/sayi22/1.jpg" />
     <br />
-    <fon style="font-size:10px"><em>Fotoğraf: Defne Hadis</em></font>
+    <fon style="font-size:10px"><em>Fotoğraf: Defne Hadiş</em></font>
   `);
   const handle = extractPageVisual(`
     <img class="mIcResim" src="/images/sayi45/semih.jpg" />
@@ -2794,7 +2809,7 @@ test('links page-level visual credits without changing their visible caption', (
   };
   const prefixed = decoratePageVisualContributorHtml(`
     <img class="mIcResim" src="/images/sayi22/1.jpg" />
-    <br /><fon style="font-size:10px"><em>Fotoğraf: Defne Hadis</em></fon>
+    <br /><fon style="font-size:10px"><em>Fotoğraf: Defne Hadiş</em></fon>
   `, work);
   const linkedHandle = decoratePageVisualContributorHtml(`
     <img src="/images/sayi45/semih.jpg" />
@@ -2810,7 +2825,7 @@ test('links page-level visual credits without changing their visible caption', (
   });
 
   assert.match(prefixed, /Fotoğraf: <a class="contributor-link"/);
-  assert.match(prefixed, />Defne Hadis<\/a>/);
+  assert.match(prefixed, />Defne Hadiş<\/a>/);
   assert.match(prefixed, /<fon style="font-size:10px"><em>/);
   assert.match(
     linkedHandle,
