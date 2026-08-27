@@ -2,19 +2,13 @@
 
 This runbook describes the cache rules shared by
 `galatadergisi.org`, `www.galatadergisi.org`, and the Access-protected
-`dev.galatadergisi.org` deployment. Cloudflare cannot match a Git branch, so
-keep rules limited to the dev hostname until the exact tested release is
-promoted to production.
+`dev.galatadergisi.org` deployment. The apex and `www` hostnames are served by
+the production slot on the VPS; dev uses the isolated dev slot on the same
+host.
 
 ## Host filters
 
-Use this filter while validating a release on dev:
-
-```text
-http.host eq "dev.galatadergisi.org"
-```
-
-After promotion, replace only the host portion with:
+Use this filter for every Cache Rule and Cache Response Rule in this runbook:
 
 ```text
 http.host in {
@@ -41,10 +35,14 @@ Create these rules in order.
 
 ### 1. Galata release HTML
 
-Dev-only expression:
+Expression:
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and http.request.method in {"GET" "PURGE"}
 and http.request.uri.path eq "/"
 and http.request.uri.query eq ""
@@ -63,10 +61,14 @@ responses.
 
 ### 2. Galata release assets
 
-Dev-only expression:
+Expression:
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and http.request.method in {"GET" "PURGE"}
 and (
   starts_with(http.request.uri.path, "/images/homepage-covers/")
@@ -95,7 +97,11 @@ successful-response policy below.
 Keep this rule last:
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and (
   http.request.uri.path in {"/healthz" "/service-worker.js"}
   or not (http.request.method in {"GET" "HEAD" "PURGE"})
@@ -106,18 +112,18 @@ Set **Cache eligibility** to **Bypass cache**. The service worker and health
 endpoint must revalidate at the origin, and unsupported write methods should
 never become cacheable through a future broad rule.
 
-After production promotion, replace the first host line of all three rules with
-the three-host filter above.
-
 ## Cache Response Rules
 
-Create these response rules in order. As with Cache Rules, start with the dev
-host and add production hosts only after promotion.
+Create these response rules in order, using the shared three-host filter.
 
 ### 1. Galata successful HTML TTL
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and http.request.method eq "GET"
 and http.request.uri.path eq "/"
 and http.request.uri.query eq ""
@@ -139,7 +145,11 @@ The browser continues to receive the origin's revalidation policy.
 ### 2. Galata successful asset TTL
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and http.request.method eq "GET"
 and (
   starts_with(http.request.uri.path, "/images/homepage-covers/")
@@ -170,7 +180,11 @@ Modify `Cache-Control`:
 Keep this response rule last:
 
 ```text
-http.host eq "dev.galatadergisi.org"
+http.host in {
+  "galatadergisi.org"
+  "www.galatadergisi.org"
+  "dev.galatadergisi.org"
+}
 and http.request.method eq "GET"
 and (
   http.request.uri.path eq "/"
@@ -191,23 +205,12 @@ and http.response.code ne 304
 Set the `no-store` directive with **Cloudflare only** disabled. This prevents
 redirects and error documents from entering either the edge or browser cache.
 
-## Submission-form retirement
+## Retired submission path
 
-When deploying the release that removes the old submission form:
-
-1. Remove `/katkida-bulunun` and
-   `starts_with(http.request.uri.path, "/katkida-bulunun/")` from every Cache
-   Rule and Cache Response Rule. The expressions above are the resulting
-   configuration.
-2. Delete the Turnstile widget previously used by the form after the production
-   release is verified. Retaining it provides no application protection once
-   the endpoint is gone.
-3. Remove any separately configured WAF, rate-limiting, redirect, or Access
-   rule that targets only `/katkida-bulunun`. The tracked origin configuration
-   no longer requires a route-specific edge rule.
-
-Do not redirect the retired path unless the editorial decision changes. The
-deployed application intentionally returns `404` for GET and rejects POST.
+Keep `/katkida-bulunun` and its descendants out of Cache Rules, Cache Response
+Rules, WAF rules, rate-limiting rules, redirects, and Access rules. Do not
+redirect the retired path unless the editorial decision changes. The deployed
+application intentionally returns `404` for GET and rejects POST.
 
 ## Deployment purge and verification
 
@@ -243,7 +246,7 @@ be `HIT` with an `Age` header. Confirm browser-facing HTML still uses the
 origin revalidation policy, while a versioned local asset uses
 `max-age=31536000` and `immutable`.
 
-For the retirement release, also verify:
+Also verify the retired submission path:
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' \

@@ -1,5 +1,13 @@
 # Immutable site operations
 
+## Current hosting topology
+
+`galatadergisi.org` and `www.galatadergisi.org` are served from the production
+slot on the VPS. `dev.galatadergisi.org` is served from the isolated dev slot
+on the same host. Cloudflare Tunnel routes all three hostnames to the
+loopback-only nginx listener. Deployment SSH configuration and GitHub
+environment secrets must target this VPS.
+
 ## Toolchain and verification
 
 Use the versions pinned in `.nvmrc` and `.go-version`. Install the dependency
@@ -74,11 +82,11 @@ diff -u /tmp/galata-site-first.sha256 /tmp/galata-site-second.sha256
 
 ## Bootstrapping an Ubuntu 26.04 host
 
-`ops/setup-server.sh` is the one-time, workstation-driven bootstrap for the
-development VPS. It expects the local SSH host `galata` to connect as `root`
-on the first run. Before using it, update and upgrade Ubuntu, reboot, attach
-the machine to Ubuntu Pro, and confirm that `ssh galata` uses the intended
-host key and administrator public key.
+`ops/setup-server.sh` is the one-time, workstation-driven bootstrap for a VPS.
+It expects the local SSH host `galata` to connect as `root` on the first run.
+Before using it, update and upgrade Ubuntu, reboot, attach the machine to
+Ubuntu Pro, and confirm that `ssh galata` uses the intended host key and
+administrator public key.
 
 Review the target and confirm interactively:
 
@@ -186,11 +194,12 @@ desired identity provider, choose the session duration, and enable **Protect
 with Access** on the tunnel's dev published application route so `cloudflared`
 also validates the application token. Production and `www` remain public.
 
-Before removing the old origin gate on an existing host, confirm that an
-unauthenticated request to `https://dev.galatadergisi.org/healthz` redirects to
-an HTTPS `/cdn-cgi/access/login/` URL. The repository intentionally does not
-store Access policies or credentials; access is granted and revoked in the
-Cloudflare dashboard.
+Before treating the dev route as ready, confirm that an unauthenticated request
+to `https://dev.galatadergisi.org/healthz` redirects to an HTTPS
+`/cdn-cgi/access/login/` URL. Repeat this check after changing the tunnel route
+or Access application. The repository intentionally does not store Access
+policies or credentials; access is granted and revoked in the Cloudflare
+dashboard.
 
 Under **Add a replica**, copy the installation command into a text editor and
 extract only its long `eyJ...` connector token. Do not paste the command,
@@ -392,14 +401,14 @@ GitHub's only Cloudflare credential is the dedicated cache-purge token. It
 never receives the Cloudflare Tunnel token, Access identity, or Access session
 token.
 
-## Dev acceptance and production cutover
+## Deployment acceptance
 
-After the three dashboard routes are saved, the dev route has **Protect with
-Access** enabled, and `tunnel-setup` reports an active connector, deploy and run
-`verify dev --public`. Sign in with an allowed identity, then test site routes,
-external image/audio range requests, and service-worker updates. Repeat from a
-private browser session with a disallowed identity and confirm that Access
-denies it.
+For a dev deployment, run `verify dev --public`, sign in with an allowed
+identity, then test site routes, external image/audio range requests, and
+service-worker updates. Repeat from a private browser session with a disallowed
+identity and confirm that Access denies it. After changing a dashboard route,
+the Access application, or the tunnel connector, repeat these checks and
+confirm that the connector reports an active connection.
 
 After an independently approved production deployment, run
 `verify production --public` and monitor nginx errors, `cloudflared`, application
