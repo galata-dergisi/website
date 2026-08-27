@@ -2213,7 +2213,7 @@ test('keeps the local production preview on the production runtime boundary', ()
   assert.match(smokeSource, /assert_status 304/);
   assert.match(smokeSource, /assert_status 206/);
   assert.match(smokeSource, /Content-Type: audio\/mpeg/);
-  assert.match(smokeSource, /report-only CSP header does not match/);
+  assert.match(smokeSource, /enforced CSP header does not match/);
   assert.match(smokeSource, /legacy video stylesheet is not externalized/);
   assert.match(smokeSource, /contributor profile script is not externalized/);
   assert.match(smokeSource, /audio response lost centralized security headers/);

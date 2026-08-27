@@ -56,13 +56,12 @@ excluded and the sibling media repository is not required.
 See [`ops/zap/README.md`](../ops/zap/README.md) for rule policy, scope, and
 timeout overrides.
 
-Both deployed vhosts currently ship their exact CSP as
-`Content-Security-Policy-Report-Only`. Before enforcing it, inspect the browser
-console through Cloudflare Access on `dev.galatadergisi.org` for the homepage,
-`/dergiler/sayi45/34`, `/katkida-bulunanlar/15-nafizcan-onder`, and a reader
-route with audio interaction. Enforce the dev include first and repeat those
-checks. Only then enforce the production include and promote ZAP rule 10038 to
-`FAIL`. Do not add a report collector or public write endpoint.
+Both deployed vhosts ship their exact CSP as `Content-Security-Policy`.
+Browser acceptance covers the homepage, `/dergiler/sayi45/34`,
+`/katkida-bulunanlar/15-nafizcan-onder`, and a reader route with audio
+interaction after changes to the policy or generated pages. Primary nginx ZAP
+policies fail rule 10038 when that enforced header is missing. Do not add a
+report collector or public write endpoint.
 
 Executable historical catalog blocks and contributor profile behavior are
 served from tracked same-origin JS and CSS assets. The generator rejects new or

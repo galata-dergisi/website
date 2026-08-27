@@ -40,6 +40,10 @@ assert_status() {
   fi
 }
 
+csp_policy_from_include() {
+  sed -n 's/^add_header Content-Security-Policy "\(.*\)" always;$/\1/p' "$1"
+}
+
 if ! command -v docker >/dev/null 2>&1 || \
   ! docker compose version >/dev/null 2>&1
 then
@@ -97,26 +101,27 @@ assert_file_contains "$temporary_dir/home.headers" \
 assert_file_contains "$temporary_dir/home.headers" \
   'X-Content-Type-Options: nosniff' \
   "content-type protection header is missing"
-expected_csp=$(sed -n \
-  's/^add_header Content-Security-Policy-Report-Only "\(.*\)" always;$/\1/p' \
+expected_csp=$(csp_policy_from_include \
   "$repo_root/ops/nginx/galata-production-csp.conf")
 actual_csp=$(awk '
-  tolower($1) == "content-security-policy-report-only:" {
+  tolower($1) == "content-security-policy:" {
     sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit
   }
 ' "$temporary_dir/home.headers")
 if [ -z "$expected_csp" ] || [ "$actual_csp" != "$expected_csp" ]; then
-  fail "report-only CSP header does not match the deployed production policy"
+  fail "enforced CSP header does not match the deployed production policy"
 fi
-if grep -i '^Content-Security-Policy:' "$temporary_dir/home.headers" >/dev/null; then
-  fail "production CSP was enforced before manual dev acceptance"
+if grep -i '^Content-Security-Policy-Report-Only:' \
+  "$temporary_dir/home.headers" >/dev/null
+then
+  fail "production response retained the report-only CSP header"
 fi
 assert_file_contains "$temporary_dir/health.headers" \
   'Strict-Transport-Security: max-age=63072000' \
   "health response lost inherited security headers"
 assert_file_contains "$temporary_dir/health.headers" \
-  'Content-Security-Policy-Report-Only:' \
-  "health response lost the report-only CSP header"
+  'Content-Security-Policy:' \
+  "health response lost the enforced CSP header"
 assert_file_contains "$temporary_dir/home.html" \
   'rel="canonical" href="https://galatadergisi.org/' \
   "production canonical URL is missing"
@@ -201,8 +206,8 @@ assert_file_contains "$temporary_dir/audio-head.headers" \
   'X-Content-Type-Options: nosniff' \
   "nginx audio response lost centralized security headers"
 assert_file_contains "$temporary_dir/audio-head.headers" \
-  'Content-Security-Policy-Report-Only:' \
-  "nginx audio response lost the report-only CSP header"
+  'Content-Security-Policy:' \
+  "nginx audio response lost the enforced CSP header"
 audio_size=$(awk 'tolower($1) == "content-length:" { sub(/\r$/, "", $2); print $2; exit }' \
   "$temporary_dir/audio-head.headers")
 if [ -z "$audio_size" ] || [ "$audio_size" -le 16 ]; then
@@ -308,8 +313,7 @@ run_enforced_csp_acceptance() {
     --dump-header "$temporary_dir/$variant-enforced.headers" \
     --output /dev/null \
     "$base_url/"
-  expected_csp=$(sed -n \
-    's/^add_header Content-Security-Policy-Report-Only "\(.*\)" always;$/\1/p' \
+  expected_csp=$(csp_policy_from_include \
     "$repo_root/ops/nginx/galata-$variant-csp.conf")
   actual_csp=$(awk '
     tolower($1) == "content-security-policy:" {

@@ -514,8 +514,10 @@ test('nginx keeps tunnel-only slots, Access boundary, and media roots independen
   assert.match(securityHeaders, /Strict-Transport-Security/);
   assert.match(securityHeaders, /X-Frame-Options/);
   assert.match(securityHeaders, /X-Content-Type-Options/);
-  assert.match(productionCsp, /Content-Security-Policy-Report-Only/);
-  assert.match(devCsp, /Content-Security-Policy-Report-Only/);
+  for (const csp of [productionCsp, devCsp]) {
+    assert.match(csp, /add_header Content-Security-Policy "/);
+    assert.doesNotMatch(csp, /Content-Security-Policy-Report-Only/);
+  }
   assert.match(production, /galata-production-csp\.conf/);
   assert.match(dev, /galata-dev-csp\.conf/);
   for (const filename of [

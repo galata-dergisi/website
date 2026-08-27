@@ -28,9 +28,9 @@ npm run security:zap:active:origin
 They write `zap-origin-report.*` and `zap-origin-active-report.*`. Their rule
 policies ignore the HSTS, clickjacking, and nosniff headers deliberately owned
 by nginx. The primary policies fail when any of those headers are missing.
-During the staged CSP rollout, rule 10038 remains informational because the
-deployed vhosts emit the exact independently verified report-only policy. It
-must be promoted to `FAIL` after production enforcement. Rule 10055 remains
+Rule 10038 is `FAIL` in the primary policies because deployed nginx must emit
+the enforced CSP header. It remains informational in the direct-origin policies
+because nginx, not the Go origin, owns that header. Rule 10055 remains
 informational for the reviewed `style-src-attr 'unsafe-inline'` exception; the
 generated-site verifier enforces the complete policy, rejects executable inline
 blocks, and permits only the tracked same-origin assets extracted from reviewed

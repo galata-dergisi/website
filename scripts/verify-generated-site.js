@@ -198,8 +198,8 @@ function inspectGeneratedCsp(development) {
   policies.forEach((policy, index) => {
     const label = index === 0 ? 'production CSP' : 'dev CSP';
     assert(
-      policy.header === 'Content-Security-Policy-Report-Only',
-      `${label} must remain report-only until manual acceptance`,
+      policy.header === 'Content-Security-Policy',
+      `${label} must remain enforced`,
     );
     nodeAssert.deepEqual(
       Array.from(policy.directives.keys()),
@@ -214,7 +214,7 @@ function inspectGeneratedCsp(development) {
       );
     });
   });
-  assert(policies[0].policy === policies[1].policy, 'report-only CSP policies differ');
+  assert(policies[0].policy === policies[1].policy, 'production and dev CSP policies differ');
 }
 
 function readEntry(entry, gzip = false) {

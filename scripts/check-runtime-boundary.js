@@ -195,8 +195,8 @@ if (
       pattern: /include \/etc\/nginx\/snippets\/galata-security-headers\.conf;/,
     },
     {
-      label: 'report-only production CSP',
-      pattern: /add_header Content-Security-Policy-Report-Only "default-src 'none';/,
+      label: 'enforced production CSP',
+      pattern: /add_header Content-Security-Policy "default-src 'none';/,
     },
     {
       label: 'stripped Cloudflare visitor address',
@@ -284,7 +284,7 @@ if (!fs.existsSync(devNginxPath) || !fs.existsSync(devCspPath)) {
     [/listen 127\.0\.0\.1:8080;/, 'loopback Cloudflare Tunnel origin listener'],
     [/location = \/healthz \{[\s\S]*Cache-Control "no-store, no-cache, must-revalidate"/, 'non-cacheable dev health'],
     [/include \/etc\/nginx\/snippets\/galata-dev-csp\.conf;/, 'dev CSP include'],
-    [/Content-Security-Policy-Report-Only "default-src 'none';/, 'report-only dev CSP'],
+    [/Content-Security-Policy "default-src 'none';/, 'enforced dev CSP'],
   ].forEach(([pattern, label]) => {
     if (!pattern.test(devBoundary)) failures.push(`dev nginx configuration lacks ${label}`);
   });

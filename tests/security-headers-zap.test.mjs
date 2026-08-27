@@ -150,13 +150,13 @@ test('nginx and origin scans have separate reviewed rule policies', () => {
     assert.equal(originBaseline.get(id), 'IGNORE');
     assert.equal(originActive.get(id), 'IGNORE');
   }
-  assert.equal(nginxBaseline.get('10038'), 'INFO');
-  assert.equal(nginxActive.get('10038'), 'INFO');
+  assert.equal(nginxBaseline.get('10038'), 'FAIL');
+  assert.equal(nginxActive.get('10038'), 'FAIL');
   assert.equal(nginxBaseline.get('10055'), 'INFO');
   assert.equal(nginxActive.get('10055'), 'INFO');
 });
 
-test('deployed vhosts use centralized report-only security policies', () => {
+test('deployed vhosts use centralized enforced security policies', () => {
   const security = read('ops/nginx/galata-security-headers.conf');
   const productionCsp = read('ops/nginx/galata-production-csp.conf');
   const devCsp = read('ops/nginx/galata-dev-csp.conf');
@@ -167,7 +167,8 @@ test('deployed vhosts use centralized report-only security policies', () => {
   assert.match(security, /X-Content-Type-Options "nosniff" always/);
   assert.match(security, /X-Frame-Options "SAMEORIGIN" always/);
   for (const csp of [productionCsp, devCsp]) {
-    assert.match(csp, /add_header Content-Security-Policy-Report-Only/);
+    assert.match(csp, /add_header Content-Security-Policy "/);
+    assert.doesNotMatch(csp, /Content-Security-Policy-Report-Only/);
     assert.doesNotMatch(csp, /report-uri|report-to|Report-To/);
     assert.match(csp, /default-src 'none'/);
     assert.match(csp, /script-src-attr 'none'/);
