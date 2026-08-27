@@ -3,6 +3,13 @@
 // Public SEO-facing content queries and safe decoration of published page HTML.
 
 const iconLibrary = require('../../client/lib/font-awesome-icons.js');
+const {
+  HTML_NAMESPACE,
+  applyHtmlReplacements,
+  assertClosedHtmlElement,
+  collectHtmlElements,
+  elementContent,
+} = require('./html-policy.js');
 
 const {
   canonicalizeContributorName,
@@ -17,41 +24,69 @@ const {
 } = require('./seo-utils.js');
 
 const legacyIconNames = new Set(iconLibrary.legacyIconNames);
-const emptyFontAwesomeIconRegexp = /<i\b(?=[^>]*\bclass\s*=)[^>]*(?:\/\s*>|>\s*<\/i\s*>)/gi;
 
 function replaceLegacyFontAwesomeIcons(html) {
-  const decorated = String(html || '').replace(emptyFontAwesomeIconRegexp, (element) => {
-    const attributes = extractAttributes(element);
-    const classes = String(attributes.class || '').split(/\s+/).filter(Boolean);
-    if (!classes.includes('fas') && !classes.includes('fab')) return element;
+  const input = String(html || '');
+  const replacements = [];
+  const processedStarts = new Set();
+  collectHtmlElements(input, { fragment: true })
+    .filter((element) => (
+      element.namespaceURI === HTML_NAMESPACE && element.tagName === 'i'
+    ))
+    .forEach((element) => {
+      const classes = String(element.attributes.get('class') || '').split(/\s+/).filter(Boolean);
+      if (!classes.includes('fas') && !classes.includes('fab')) return;
+      if (processedStarts.has(element.startOffset)) return;
+      processedStarts.add(element.startOffset);
 
-    const iconClasses = classes.filter((className) => className.startsWith('fa-'));
-    if (iconClasses.length !== 1) {
-      throw new Error(`Expected one Font Awesome icon class in: ${element}`);
-    }
+      const openingTag = input.slice(element.startOffset, element.contentStartOffset);
+      const sourceSelfClosing = /\/\s*>$/.test(openingTag);
+      let end = element.contentStartOffset;
+      if (!sourceSelfClosing) {
+        assertClosedHtmlElement(element, 'Legacy Font Awesome markup');
+        if (elementContent(input, element).trim() !== '') {
+          throw new Error(`Unsupported Font Awesome markup: ${openingTag}`);
+        }
+        end = element.endOffset;
+      }
 
-    const name = iconClasses[0].slice(3);
-    if (name === 'certificate2') return '';
-    if (!legacyIconNames.has(name)) {
-      throw new Error(`Unmapped legacy Font Awesome icon: ${name}`);
-    }
+      const iconClasses = classes.filter((className) => className.startsWith('fa-'));
+      if (iconClasses.length !== 1) {
+        throw new Error(`Expected one Font Awesome icon class in: ${openingTag}`);
+      }
 
-    const icon = iconLibrary.getIcon(name);
-    const href = `#${iconLibrary.symbolId(name)}`;
-    return [
-      `<svg class="legacy-icon legacy-icon-${name}"`,
-      ` aria-hidden="true" focusable="false" viewBox="${icon.viewBox}"`,
-      ' xmlns="http://www.w3.org/2000/svg">',
-      `<use href="${href}" width="100%" height="100%"></use>`,
-      '</svg>',
-    ].join('');
-  });
+      const name = iconClasses[0].slice(3);
+      let content = '';
+      if (name !== 'certificate2') {
+        if (!legacyIconNames.has(name)) {
+          throw new Error(`Unmapped legacy Font Awesome icon: ${name}`);
+        }
 
-  const unmatched = decorated.match(
-    /<i\b[^>]*\bclass\s*=\s*(?:"[^"]*\bfa(?:s|b)\b[^"]*"|'[^']*\bfa(?:s|b)\b[^']*')[^>]*>/i,
+        const icon = iconLibrary.getIcon(name);
+        const href = `#${iconLibrary.symbolId(name)}`;
+        content = [
+          `<svg class="legacy-icon legacy-icon-${name}"`,
+          ` aria-hidden="true" focusable="false" viewBox="${icon.viewBox}"`,
+          ' xmlns="http://www.w3.org/2000/svg">',
+          `<use href="${href}" width="100%" height="100%"></use>`,
+          '</svg>',
+        ].join('');
+      }
+      replacements.push({ start: element.startOffset, end, content });
+    });
+
+  const decorated = applyHtmlReplacements(input, replacements);
+
+  const unmatched = collectHtmlElements(decorated, { fragment: true }).find(
+    (element) => {
+      if (element.namespaceURI !== HTML_NAMESPACE || element.tagName !== 'i') return false;
+      const classes = String(element.attributes.get('class') || '').split(/\s+/).filter(Boolean);
+      return classes.includes('fas') || classes.includes('fab');
+    },
   );
   if (unmatched) {
-    throw new Error(`Unsupported Font Awesome markup: ${unmatched[0]}`);
+    const openingTag = decorated.slice(unmatched.startOffset, unmatched.contentStartOffset);
+    throw new Error(`Unsupported Font Awesome markup: ${openingTag}`);
   }
   return decorated;
 }

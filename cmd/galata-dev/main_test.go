@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -110,6 +111,14 @@ func TestDevelopmentFilesServeImagesAndAudioRanges(t *testing.T) {
 	)
 	if shelf.Code != http.StatusOK || shelf.Body.String() != "current-shelf" {
 		t.Fatalf("shelf status=%d body=%q", shelf.Code, shelf.Body.String())
+	}
+	post := httptest.NewRecorder()
+	handler.ServeHTTP(
+		post,
+		httptest.NewRequest(http.MethodPost, "/images/first-shelf.png", nil),
+	)
+	if post.Code != http.StatusMethodNotAllowed || post.Header().Get("Allow") != "GET, HEAD" {
+		t.Fatalf("post status=%d allow=%q", post.Code, post.Header().Get("Allow"))
 	}
 
 	image := httptest.NewRecorder()
@@ -216,13 +225,112 @@ func TestDevelopmentFilesRejectDirectoriesAndTraversal(t *testing.T) {
 		mediaRoot:  root,
 		next:       http.NotFoundHandler(),
 	}
-	for _, target := range []string{"/images/", "/images/../secret", "/images/%2e%2e/secret"} {
+	for _, target := range []string{
+		"/images/",
+		"/images/../secret",
+		"/images/%2e%2e/secret",
+		"/images/%5c..%5csecret",
+		"/images/%00secret",
+	} {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusNotFound {
 			t.Fatalf("%s status=%d", target, response.Code)
 		}
+	}
+}
+
+func TestDevelopmentFilesUseRootedSymlinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks requires additional privileges on Windows")
+	}
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "images"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	insideFile := filepath.Join(root, "inside.txt")
+	if err := os.WriteFile(insideFile, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outsideFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(
+		filepath.Join("..", "inside.txt"),
+		filepath.Join(root, "images", "inside.txt"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	escapingTarget, err := filepath.Rel(filepath.Join(root, "images"), outsideFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(
+		escapingTarget,
+		filepath.Join(root, "images", "outside.txt"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := developmentFiles{
+		publicRoot: root,
+		mediaRoot:  root,
+		next:       http.NotFoundHandler(),
+	}
+	inside := httptest.NewRecorder()
+	handler.ServeHTTP(
+		inside,
+		httptest.NewRequest(http.MethodGet, "/images/inside.txt", nil),
+	)
+	if inside.Code != http.StatusOK || inside.Body.String() != "inside" {
+		t.Fatalf("inside status=%d body=%q", inside.Code, inside.Body.String())
+	}
+
+	escaping := httptest.NewRecorder()
+	handler.ServeHTTP(
+		escaping,
+		httptest.NewRequest(http.MethodGet, "/images/outside.txt", nil),
+	)
+	if escaping.Code != http.StatusNotFound || strings.Contains(escaping.Body.String(), "outside") {
+		t.Fatalf("escaping status=%d body=%q", escaping.Code, escaping.Body.String())
+	}
+}
+
+func TestDevelopmentFilesPreserveFallbackAndRootErrors(t *testing.T) {
+	root := t.TempDir()
+	fallback := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusTeapot)
+	})
+	handler := developmentFiles{
+		publicRoot: root,
+		mediaRoot:  root,
+		next:       fallback,
+	}
+
+	missing := httptest.NewRecorder()
+	handler.ServeHTTP(
+		missing,
+		httptest.NewRequest(http.MethodGet, "/missing.txt", nil),
+	)
+	if missing.Code != http.StatusTeapot {
+		t.Fatalf("missing status=%d", missing.Code)
+	}
+
+	unavailable := developmentFiles{
+		publicRoot: filepath.Join(root, "unavailable"),
+		mediaRoot:  filepath.Join(root, "unavailable"),
+		next:       fallback,
+	}
+	response := httptest.NewRecorder()
+	unavailable.ServeHTTP(
+		response,
+		httptest.NewRequest(http.MethodGet, "/missing.txt", nil),
+	)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("unavailable root status=%d", response.Code)
 	}
 }
 

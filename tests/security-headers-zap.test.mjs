@@ -229,6 +229,7 @@ test('Docker preview enforces and browser-tests both deployed CSP variants', () 
   const browserDockerfile = read('ops/local-production/Dockerfile.browser');
   const runner = read('scripts/test-production-preview.sh');
   const browserTest = read('scripts/test-csp-browser.mjs');
+  const browserLauncher = read('scripts/lib/chrome-devtools-launcher.mjs');
   const workflow = read('.github/workflows/verify.yml');
 
   assert.match(nginxDockerfile, /ARG GALATA_PREVIEW_CSP_VARIANT=production/);
@@ -259,6 +260,10 @@ test('Docker preview enforces and browser-tests both deployed CSP variants', () 
   assert.match(compose, /tmpfs:\s*\n\s*- \/tmp:size=512m/);
   assert.match(browserDockerfile, /FROM node:24\.18\.0-alpine/);
   assert.match(browserDockerfile, /apk add --no-cache chromium/);
+  assert.match(
+    browserDockerfile,
+    /COPY --chown=node:node scripts\/lib\/chrome-devtools-launcher\.mjs \/app\/lib\/chrome-devtools-launcher\.mjs/,
+  );
   assert.match(browserDockerfile, /USER node/);
   assert.match(runner, /GALATA_PREVIEW_CSP_VARIANT=production/);
   assert.match(runner, /GALATA_PREVIEW_ENFORCE_CSP=0/);
@@ -268,6 +273,8 @@ test('Docker preview enforces and browser-tests both deployed CSP variants', () 
   assert.match(browserTest, /Audits\.issueAdded/);
   assert.match(browserTest, /Network\.loadingFailed/);
   assert.match(browserTest, /Runtime\.exceptionThrown/);
+  assert.match(browserTest, /\.\/lib\/chrome-devtools-launcher\.mjs/);
+  assert.match(browserLauncher, /DevToolsActivePort/);
   for (const route of [
     '/dergiler/sayi45/34',
     '/katkida-bulunanlar/15-nafizcan-onder',

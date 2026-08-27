@@ -16,6 +16,7 @@ const {
   isBackCoverPage,
   normalizeText,
   slugify,
+  stripHtml,
 } = require('../scripts/lib/seo-utils.js');
 const {
   decorateInlineMediaHtml,
@@ -47,6 +48,9 @@ const StaticPublicContent = require('../scripts/lib/static-public-content.js');
 const {
   transformAudioPlayerPage,
 } = require('../scripts/lib/audio-player-content.js');
+const {
+  collectHtmlElements,
+} = require('../scripts/lib/html-policy.js');
 
 const carouselStateModule = import(
   '../client/pages/homepage/components/carousel-state.mjs'
@@ -147,6 +151,23 @@ test('replaces the complete legacy Font Awesome icon set with inline SVG referen
     () => replaceLegacyFontAwesomeIcons('<i class="fas fa-unreviewed" />'),
     /Unmapped legacy Font Awesome icon: unreviewed/,
   );
+  assert.throws(
+    () => replaceLegacyFontAwesomeIcons('<i class="fas fa-book fa-link" />'),
+    /Expected one Font Awesome icon class/,
+  );
+  assert.throws(
+    () => replaceLegacyFontAwesomeIcons('<i class="fas fa-book">visible</i>'),
+    /Unsupported Font Awesome markup/,
+  );
+
+  const embedded = '<if<i class="fas fa-certificate2" />rame src="https://example.com"></iframe>';
+  const embeddedResult = replaceLegacyFontAwesomeIcons(embedded);
+  assert.strictEqual(embeddedResult, embedded);
+  assert.strictEqual(
+    collectHtmlElements(embeddedResult, { fragment: true })
+      .filter((element) => element.tagName === 'iframe').length,
+    0,
+  );
 });
 
 test('converts every Font Awesome reference in the published issue corpus', () => {
@@ -154,9 +175,15 @@ test('converts every Font Awesome reference in the published issue corpus', () =
   const content = new StaticPublicContent(reader);
   const convertedNames = new Set();
   let sourceContainsMalformedCertificate = false;
+  let sourceIconCount = 0;
 
   content.getPublishedMagazines().forEach((magazine) => {
     const issue = content.getIssue(magazine.index);
+    sourceIconCount += Object.values(issue.pages).reduce((total, html) => (
+      total + (html.match(
+        /<i\b[^>]*\bclass\s*=\s*(?:"[^"]*\b(?:fas|fab)\b[^"]*"|'[^']*\b(?:fas|fab)\b[^']*')[^>]*>/gi,
+      ) || []).length
+    ), 0);
     sourceContainsMalformedCertificate = sourceContainsMalformedCertificate
       || Object.values(issue.pages).some((html) => /fa-certificate2/.test(html));
     const prepared = content.prepareIssuePages(magazine.index, issue.pages);
@@ -174,6 +201,7 @@ test('converts every Font Awesome reference in the published issue corpus', () =
   reader.close();
 
   assert(sourceContainsMalformedCertificate);
+  assert.strictEqual(sourceIconCount, 270);
   assert.deepStrictEqual(
     [...convertedNames].sort(),
     [...iconLibrary.legacyIconNames].sort(),
@@ -217,6 +245,31 @@ test('adds isolated development rendering without changing production templates'
     /googletagmanager|serviceWorker\.register\(/,
   );
   assert.match(source, /googletagmanager/);
+});
+
+test('removes development scripts by parsed identity and preserves unrelated scripts', () => {
+  const source = `<!doctype html><html><head>
+    <meta name="robots" content="noindex">
+    <script data-keep="true">window.dataLayer = []; gtag('config', 'keep');</script>
+    <script defer src="https:&#47;&#47;www.googletagmanager.com/gtag/js?id=test"></script >
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/service-worker.js'); } <script>alert(1)</script >tail</script>
+  </head><body>unchanged</body></html>`;
+  const rendered = renderDevelopmentDocument(source, 'parsed-generation');
+
+  assert.match(
+    rendered,
+    /<script data-keep="true">window\.dataLayer = \[\]; gtag\('config', 'keep'\);<\/script>/,
+  );
+  assert.doesNotMatch(rendered, /googletagmanager|serviceWorker\.register|<script>alert\(1\)/);
+  assert.match(rendered, /tail/);
+  assert.match(rendered, /<body>unchanged<\/body>/);
+  assert.throws(
+    () => renderDevelopmentDocument(
+      '<html><head><script>if (\'serviceWorker\' in navigator) { navigator.serviceWorker.register(\'/service-worker.js\'); }',
+      'generation',
+    ),
+    /without an explicit closing tag/,
+  );
 });
 
 test('keeps generator production defaults and requires a development token', () => {
@@ -360,6 +413,43 @@ test('publishes only MP3 while preserving malformed and duplicate legacy inputs'
     .forEach((name) => {
       assert.match(result.html, new RegExp(`href="#${iconLibrary.symbolId(name)}"`));
     });
+});
+
+test('removes parsed legacy audio scripts without revealing nested script tokens', () => {
+  const html = `
+    before
+    <script>startPlayer(); <script>alert(1)</script >tail</script>
+    <script data-keep="true">console.log('keep');</script>
+    <input name="player_songs" size="1" id="Track" value="Reader" class="/audio/a.mp3">
+    <audio id="player"></audio>
+    <div id="show_time"><div></div></div>
+    <div class="player_container"><div></div></div>
+    after`;
+  const result = transformAudioPlayerPage(html, {
+    issue: 99,
+    pageNumber: 8,
+    playerOrdinal: 1,
+    recitations: [],
+  });
+
+  assert.match(result.html, /before/);
+  assert.match(result.html, /after/);
+  assert.match(result.html, /tail/);
+  assert.match(result.html, /<script data-keep="true">console\.log\('keep'\);<\/script>/);
+  assert.doesNotMatch(result.html, /startPlayer|<script>alert\(1\)/);
+
+  assert.throws(
+    () => transformAudioPlayerPage(`
+      <script>startPlayer();
+      <input name="player_songs" size="1" id="Track" value="Reader" class="/audio/a.mp3">
+      <div class="player_container"></div>`, {
+      issue: 99,
+      pageNumber: 9,
+      playerOrdinal: 1,
+      recitations: [],
+    }),
+    /without an explicit closing tag/,
+  );
 });
 
 test('preserves the generic team credit as unlinked player text only', () => {
@@ -2303,6 +2393,20 @@ test('development media inventory requires MP3 but treats OGG as archival', () =
     [...references.keys()].some((publicPath) => /\.ogg$/i.test(publicPath)),
     false,
   );
+});
+
+test('strips parsed script and style subtrees without changing legacy entity policy', () => {
+  assert.strictEqual(
+    stripHtml('before<script>alert(1)</script >middle<style>hidden</style >after'),
+    'before middle after',
+  );
+  assert.strictEqual(stripHtml('before<script>alert(1)'), 'before');
+  assert.strictEqual(stripHtml('before<style>hidden'), 'before');
+  assert.strictEqual(
+    stripHtml('before<script>outer<script>alert(1)</script >tail</script>after'),
+    'before tail after',
+  );
+  assert.strictEqual(stripHtml('A &amp; B &hellip; C'), 'A & B &hellip; C');
 });
 
 test('creates stable Turkish slugs and normalized names', () => {

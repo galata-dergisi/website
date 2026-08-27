@@ -8,6 +8,10 @@
 // (at your option) any later version.
 
 const contributorAliasDefinitions = require('../../content/contributor-aliases.json');
+const {
+  applyHtmlReplacements,
+  collectHtmlElements,
+} = require('./html-policy.js');
 
 const HTML_ENTITIES = {
   amp: '&',
@@ -26,10 +30,16 @@ function decodeHtmlEntities(value = '') {
 }
 
 function stripHtml(value = '') {
+  const source = String(value);
+  const replacements = collectHtmlElements(source, { fragment: true })
+    .filter((element) => ['script', 'style'].includes(element.tagName))
+    .map((element) => ({
+      start: element.startOffset,
+      end: element.hasExplicitEndTag ? element.endOffset : source.length,
+      content: ' ',
+    }));
   return decodeHtmlEntities(
-    String(value)
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    applyHtmlReplacements(source, replacements)
       .replace(/<br\s*\/?>/gi, ' ')
       .replace(/<[^>]+>/g, ' '),
   )

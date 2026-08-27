@@ -5,7 +5,7 @@
 // while DevTools sends right-arrow mouse clicks at a fixed sub-50ms cadence.
 
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -19,6 +19,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+
+import { launchDevToolsBrowser } from './lib/chrome-devtools-launcher.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const generatedSiteScript = path.join(repoRoot, 'scripts', 'generate-site.js');
@@ -38,20 +40,6 @@ const settleMilliseconds = 1_300;
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean);
-  const chrome = candidates.find((candidate) => existsSync(candidate));
-  if (!chrome) throw new Error('Chrome not found; set CHROME_BIN to its executable path');
-  return chrome;
 }
 
 function generateDevelopmentSite(siteRoot, baseUrl) {
@@ -145,55 +133,6 @@ function startSiteServer() {
       });
     });
   });
-}
-
-function launchChrome() {
-  const profile = mkdtempSync(path.join(tmpdir(), 'galata-carousel-lag-chrome-'));
-  const chrome = spawn(findChrome(), [
-    '--headless=new',
-    '--no-sandbox',
-    '--hide-scrollbars',
-    '--force-color-profile=srgb',
-    '--force-device-scale-factor=1',
-    '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`,
-    '--window-size=1200,900',
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-  const websocketURL = new Promise((resolve, reject) => {
-    let stderr = '';
-    const timeout = setTimeout(() => {
-      reject(new Error(`Chrome DevTools endpoint timed out\n${stderr}`));
-    }, 15_000);
-    chrome.stderr.setEncoding('utf8');
-    chrome.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (match) {
-        clearTimeout(timeout);
-        resolve(match[1]);
-      }
-    });
-    chrome.once('exit', (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Chrome exited before DevTools was ready (${code})\n${stderr}`));
-    });
-  });
-
-  return {
-    chrome,
-    profile,
-    websocketURL,
-    async close() {
-      if (chrome.exitCode === null) {
-        const exited = new Promise((resolve) => chrome.once('exit', resolve));
-        chrome.kill('SIGTERM');
-        await exited;
-      }
-      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-    },
-  };
 }
 
 class DevToolsClient {
@@ -536,15 +475,26 @@ async function runRightEdgeStress(client, sessionId, url, fixture) {
   return { attempts, emptyShelfObserved, terminalScreenshot };
 }
 
-const fixture = await startSiteServer();
-const temporarySiteRoot = mkdtempSync(path.join(tmpdir(), 'galata-carousel-lag-site-'));
-const browser = launchChrome();
+let fixture;
+let temporarySiteRoot;
+let browser;
 let client;
 
 try {
+  fixture = await startSiteServer();
+  temporarySiteRoot = mkdtempSync(path.join(tmpdir(), 'galata-carousel-lag-site-'));
   generateDevelopmentSite(temporarySiteRoot, fixture.url);
   fixture.load(temporarySiteRoot);
-  client = await DevToolsClient.connect(await browser.websocketURL);
+  browser = await launchDevToolsBrowser({
+    extraArguments: [
+      '--hide-scrollbars',
+      '--force-color-profile=srgb',
+      '--force-device-scale-factor=1',
+    ],
+    profilePrefix: 'galata-carousel-lag-chrome-',
+    windowSize: '1200,900',
+  });
+  client = await DevToolsClient.connect(browser.websocketURL);
   const { targetId } = await client.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await client.send('Target.attachToTarget', { targetId, flatten: true });
   await client.send('Page.enable', {}, sessionId);
@@ -634,7 +584,9 @@ try {
   ].join('\n'));
 } finally {
   client?.close();
-  await browser.close();
-  await new Promise((resolve) => fixture.server.close(resolve));
-  rmSync(temporarySiteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  await browser?.close();
+  if (fixture) await new Promise((resolve) => fixture.server.close(resolve));
+  if (temporarySiteRoot) {
+    rmSync(temporarySiteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
 }

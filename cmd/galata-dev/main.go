@@ -73,13 +73,13 @@ func (handler developmentFiles) ServeHTTP(
 		return
 	}
 
-	root := handler.publicRoot
+	rootPath := handler.publicRoot
 	relative := strings.TrimPrefix(request.URL.Path, "/")
 	if issueImagePathPattern.MatchString(request.URL.Path) {
-		root = handler.mediaRoot
+		rootPath = handler.mediaRoot
 	}
 	if matches := audioPathPattern.FindStringSubmatch(request.URL.Path); matches != nil {
-		root = handler.mediaRoot
+		rootPath = handler.mediaRoot
 		relative = filepath.ToSlash(filepath.Join(
 			"audio",
 			"sayi"+matches[1],
@@ -91,47 +91,19 @@ func (handler developmentFiles) ServeHTTP(
 		return
 	}
 
-	filename := filepath.Join(root, filepath.FromSlash(relative))
-	resolvedRoot, err := filepath.Abs(root)
+	root, err := os.OpenRoot(rootPath)
 	if err != nil {
 		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	resolvedFile, err := filepath.Abs(filename)
-	if err != nil {
-		http.NotFound(writer, request)
-		return
-	}
-	withinRoot, err := filepath.Rel(resolvedRoot, resolvedFile)
-	if err != nil || withinRoot == ".." ||
-		strings.HasPrefix(withinRoot, ".."+string(filepath.Separator)) {
-		http.NotFound(writer, request)
-		return
-	}
+	defer root.Close()
 
-	realRoot, err := filepath.EvalSymlinks(resolvedRoot)
-	if err != nil {
-		http.Error(writer, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	realFile, err := filepath.EvalSymlinks(resolvedFile)
+	file, err := root.Open(filepath.FromSlash(relative))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			handler.next.ServeHTTP(writer, request)
 			return
 		}
-		http.NotFound(writer, request)
-		return
-	}
-	withinRoot, err = filepath.Rel(realRoot, realFile)
-	if err != nil || withinRoot == ".." ||
-		strings.HasPrefix(withinRoot, ".."+string(filepath.Separator)) {
-		http.NotFound(writer, request)
-		return
-	}
-
-	file, err := os.Open(realFile)
-	if err != nil {
 		http.NotFound(writer, request)
 		return
 	}
@@ -161,7 +133,13 @@ func (handler developmentFiles) ServeHTTP(
 
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(writer, request, filepath.Base(resolvedFile), info.ModTime(), file)
+	http.ServeContent(
+		writer,
+		request,
+		filepath.Base(filepath.FromSlash(relative)),
+		info.ModTime(),
+		file,
+	)
 }
 
 type serverConfig struct {

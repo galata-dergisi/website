@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 const {
+  applyHtmlReplacements,
   assertClosedHtmlElement,
   collectHtmlElements,
   elementContent,
@@ -91,11 +92,7 @@ function createLegacyInlineAssetTransformer(resolveAsset = (pathname) => pathnam
         });
       });
 
-    return replacements
-      .sort((left, right) => right.start - left.start)
-      .reduce((result, replacement) => (
-        `${result.slice(0, replacement.start)}${replacement.content}${result.slice(replacement.end)}`
-      ), input);
+    return applyHtmlReplacements(input, replacements);
   }
 
   function assertComplete() {

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+
+import {
+  findChromeExecutable,
+  launchDevToolsBrowser,
+} from './lib/chrome-devtools-launcher.mjs';
 
 const baseUrl = new URL(process.env.GALATA_CSP_BASE_URL || 'https://localhost');
 const policyVariant = process.env.GALATA_CSP_VARIANT || 'production';
@@ -28,76 +29,6 @@ async function waitFor(check, label, timeoutMilliseconds = 15_000) {
   }
   const suffix = lastError ? `: ${lastError.message}` : '';
   throw new Error(`Timed out waiting for ${label}${suffix}`);
-}
-
-function findChromium() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-  ].filter(Boolean);
-  const executable = candidates.find((candidate) => existsSync(candidate));
-  if (!executable) throw new Error('Chromium was not found in the browser image');
-  return executable;
-}
-
-function launchChromium() {
-  const profile = mkdtempSync(path.join(tmpdir(), 'galata-csp-browser-'));
-  const chromium = spawn(findChromium(), [
-    '--headless=new',
-    '--no-sandbox',
-    '--disable-gpu',
-    '--disable-dev-shm-usage',
-    '--disable-background-networking',
-    '--disable-default-apps',
-    '--disable-extensions',
-    '--disable-sync',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--ignore-certificate-errors',
-    '--allow-insecure-localhost',
-    '--autoplay-policy=no-user-gesture-required',
-    '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`,
-    '--window-size=1280,900',
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-  let stderr = '';
-  const websocketUrl = new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error(`Chromium DevTools endpoint timed out\n${stderr}`));
-    }, 20_000);
-    chromium.stderr.setEncoding('utf8');
-    chromium.stderr.on('data', (chunk) => {
-      stderr = `${stderr}${chunk}`.slice(-20_000);
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (match) {
-        clearTimeout(timeout);
-        resolve(match[1]);
-      }
-    });
-    chromium.once('exit', (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`Chromium exited before DevTools was ready (${code})\n${stderr}`));
-    });
-  });
-
-  return {
-    chromium,
-    profile,
-    websocketUrl,
-    stderr: () => stderr,
-    async close() {
-      if (chromium.exitCode === null) {
-        const exited = new Promise((resolve) => chromium.once('exit', resolve));
-        chromium.kill('SIGTERM');
-        await Promise.race([exited, delay(5_000)]);
-        if (chromium.exitCode === null) chromium.kill('SIGKILL');
-      }
-      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-    },
-  };
 }
 
 class DevToolsClient {
@@ -353,12 +284,15 @@ async function acceptLegacyVideo(client, sessionId) {
   assert.equal(externalAssets.stylesheet, true, 'legacy video stylesheet must be external');
   assert.equal(externalAssets.script, true, 'legacy video script must be external');
 
-  await delay(50);
-  await evaluate(client, sessionId, 'document.querySelector(".video-play-button").click()');
   await waitFor(
-    () => evaluate(client, sessionId, `document.querySelector('.video-play-button').classList.contains('hide')
-      && document.querySelector('.video-mask').classList.contains('hide')
-      && window.__galataCspTestMediaPlayCalls > 0`),
+    () => evaluate(client, sessionId, `(() => {
+      const playButton = document.querySelector('.video-play-button');
+      const videoMask = document.querySelector('.video-mask');
+      if (!playButton.classList.contains('hide')) playButton.click();
+      return playButton.classList.contains('hide')
+        && videoMask.classList.contains('hide')
+        && window.__galataCspTestMediaPlayCalls > 0;
+    })()`),
     'legacy external video handler',
   );
 }
@@ -593,11 +527,23 @@ async function runNegativeProbes(client, sessionId, diagnostics) {
 }
 
 async function runSuite() {
-  const browser = launchChromium();
-  activeBrowser = browser;
+  let browser;
   let client;
   try {
-    client = await DevToolsClient.connect(await browser.websocketUrl);
+    browser = await launchDevToolsBrowser({
+      browserName: 'Chromium',
+      executable: findChromeExecutable({ browserName: 'Chromium' }),
+      extraArguments: [
+        '--ignore-certificate-errors',
+        '--allow-insecure-localhost',
+        '--autoplay-policy=no-user-gesture-required',
+      ],
+      profilePrefix: 'galata-csp-browser-',
+      startupTimeoutMilliseconds: 20_000,
+      windowSize: '1280,900',
+    });
+    activeBrowser = browser;
+    client = await DevToolsClient.connect(browser.websocketURL);
     const { targetId } = await client.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await client.send('Target.attachToTarget', {
       targetId,
@@ -669,12 +615,12 @@ async function runSuite() {
       `${policyVariant} enforced CSP browser acceptance passed (${diagnostics.cspIssues.length} expected negative-probe issues).\n`,
     );
   } catch (error) {
-    const browserLog = browser.stderr();
+    const browserLog = browser?.stderr();
     if (browserLog) error.message = `${error.message}\nChromium stderr:\n${browserLog}`;
     throw error;
   } finally {
     client?.close();
-    await browser.close();
+    await browser?.close();
     if (activeBrowser === browser) activeBrowser = undefined;
   }
 }

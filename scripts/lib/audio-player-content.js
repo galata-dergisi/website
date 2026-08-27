@@ -9,6 +9,12 @@ const {
   extractAttributes,
   isGenericReciter,
 } = require('./seo-utils.js');
+const {
+  HTML_NAMESPACE,
+  applyHtmlReplacements,
+  assertClosedHtmlElement,
+  collectHtmlElements,
+} = require('./html-policy.js');
 const iconLibrary = require('../../client/lib/font-awesome-icons.js');
 
 const PLAYER_INPUT_REGEXP = /<input\b[^>]*\bname\s*=\s*(?:"player_songs"|'player_songs')[^>]*>/gi;
@@ -162,10 +168,26 @@ function extractPlayerTracks(html, context) {
 }
 
 function removeLegacyPlayerRuntime(html) {
-  let result = String(html || '');
-  result = result.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (script) => (
-    /\b(?:startPlayer|initPlayer)\s*\(/.test(script) ? '' : script
-  ));
+  const input = String(html || '');
+  const replacements = [];
+  collectHtmlElements(input, { fragment: true })
+    .filter((element) => (
+      element.namespaceURI === HTML_NAMESPACE && element.tagName === 'script'
+    ))
+    .forEach((element) => {
+      const end = element.hasExplicitEndTag ? element.contentEndOffset : input.length;
+      const content = input.slice(element.contentStartOffset, end);
+      if (!/\b(?:startPlayer|initPlayer)\s*\(/.test(content)) return;
+
+      assertClosedHtmlElement(element, 'Legacy player runtime');
+      replacements.push({
+        start: element.startOffset,
+        end: element.endOffset,
+        content: '',
+      });
+    });
+
+  let result = applyHtmlReplacements(input, replacements);
   result = result.replace(PLAYER_INPUT_REGEXP, '');
   result = result.replace(
     /<audio\b[^>]*\bid\s*=\s*(?:"player"|'player')[^>]*>[\s\S]*?<\/audio\s*>/gi,

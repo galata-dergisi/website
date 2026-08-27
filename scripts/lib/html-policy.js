@@ -46,6 +46,41 @@ function collectHtmlElements(source, { fragment = false } = {}) {
   return elements;
 }
 
+function applyHtmlReplacements(source, replacements) {
+  const input = String(source);
+  const ordered = Array.from(replacements || []).map((replacement, index) => {
+    const start = replacement?.start;
+    const end = replacement?.end;
+    if (
+      !Number.isInteger(start)
+      || !Number.isInteger(end)
+      || start < 0
+      || end < start
+      || end > input.length
+    ) {
+      throw new Error(`Invalid HTML replacement range at index ${index}: ${start}-${end}`);
+    }
+    return {
+      start,
+      end,
+      content: String(replacement.content ?? ''),
+    };
+  }).sort((left, right) => left.start - right.start || left.end - right.end);
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].start < ordered[index - 1].end) {
+      throw new Error(
+        `Overlapping HTML replacement ranges: ${ordered[index - 1].start}-${ordered[index - 1].end}`
+        + ` and ${ordered[index].start}-${ordered[index].end}`,
+      );
+    }
+  }
+
+  return ordered.reverse().reduce((result, replacement) => (
+    `${result.slice(0, replacement.start)}${replacement.content}${result.slice(replacement.end)}`
+  ), input);
+}
+
 function assertClosedHtmlElement(element, context) {
   if (element.namespaceURI !== HTML_NAMESPACE) {
     throw new Error(`${context} contains an unsupported ${element.tagName} namespace`);
@@ -73,6 +108,7 @@ function elementContent(source, element) {
 
 module.exports = {
   HTML_NAMESPACE,
+  applyHtmlReplacements,
   assertClosedHtmlElement,
   collectHtmlElements,
   elementContent,

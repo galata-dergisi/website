@@ -3,6 +3,13 @@
 // Development-only HTML changes. Production generation never calls this
 // module's transform, keeping release documents byte-for-byte unchanged.
 
+const {
+  HTML_NAMESPACE,
+  applyHtmlReplacements,
+  assertClosedHtmlElement,
+  collectHtmlElements,
+} = require('./html-policy.js');
+
 const DEVELOPMENT_RUNTIME_PATH = '/__dev/runtime.js';
 
 // Keep this asset independent of the generation token so the deployed dev
@@ -79,21 +86,51 @@ function developmentClient(generationToken) {
     <script src="${DEVELOPMENT_RUNTIME_PATH}" defer></script>`;
 }
 
+function isGoogleTagManagerSource(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:' && url.hostname === 'www.googletagmanager.com';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function removableDevelopmentScript(source, element) {
+  if (element.attributes.has('src')) {
+    return isGoogleTagManagerSource(element.attributes.get('src'));
+  }
+  if (element.attributes.size > 0) return false;
+
+  const end = element.hasExplicitEndTag ? element.contentEndOffset : source.length;
+  const content = source.slice(element.contentStartOffset, end);
+  const registersServiceWorker = (
+    /^\s*if\s*\(\s*['"]serviceWorker['"]\s+in\s+navigator\s*\)/i.test(content)
+    && /\bnavigator\.serviceWorker\.register\s*\(/.test(content)
+  );
+  const configuresGoogleTagManager = (
+    /^\s*window\.dataLayer\s*=/i.test(content)
+    && /\bgtag\s*\(\s*['"]config['"]/.test(content)
+  );
+  return registersServiceWorker || configuresGoogleTagManager;
+}
+
 function renderDevelopmentDocument(source, generationToken) {
-  let html = String(source);
-  html = html
-    .replace(
-      /<script>\s*if\s*\(\s*['"]serviceWorker['"]\s+in\s+navigator\s*\)[\s\S]*?<\/script>/gi,
-      '',
-    )
-    .replace(
-      /<script[^>]+src=["']https:\/\/www\.googletagmanager\.com\/[^"']+["'][^>]*><\/script>/gi,
-      '',
-    )
-    .replace(
-      /<script>\s*window\.dataLayer\s*=[\s\S]*?gtag\(\s*['"]config['"][\s\S]*?<\/script>/gi,
-      '',
-    );
+  const input = String(source);
+  const replacements = [];
+  collectHtmlElements(input)
+    .filter((element) => (
+      element.namespaceURI === HTML_NAMESPACE && element.tagName === 'script'
+    ))
+    .forEach((element) => {
+      if (!removableDevelopmentScript(input, element)) return;
+      assertClosedHtmlElement(element, 'Development document');
+      replacements.push({
+        start: element.startOffset,
+        end: element.endOffset,
+        content: '',
+      });
+    });
+  let html = applyHtmlReplacements(input, replacements);
   if (!/<meta\s+name=["']robots["']/i.test(html)) {
     html = html.replace(
       /<head>/i,

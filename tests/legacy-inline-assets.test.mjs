@@ -9,6 +9,7 @@ const {
   createLegacyInlineAssetTransformer,
 } = require('../scripts/lib/legacy-inline-assets.js');
 const {
+  applyHtmlReplacements,
   collectHtmlElements,
   inlineScriptDisposition,
 } = require('../scripts/lib/html-policy.js');
@@ -33,6 +34,32 @@ const reviewedLegacyScript = [
 test('browser source hashes normalize CRLF and bare CR line endings', () => {
   const expected = crypto.createHash('sha256').update('first\nsecond\nthird').digest('base64');
   assert.equal(browserSourceHash('first\r\nsecond\rthird'), expected);
+});
+
+test('HTML source replacements preserve untouched bytes and reject unsafe ranges', () => {
+  const source = 'prefix <script>one</script> middle <style>two</style> suffix';
+  const elements = collectHtmlElements(source, { fragment: true });
+  const script = elements.find((element) => element.tagName === 'script');
+  const style = elements.find((element) => element.tagName === 'style');
+
+  assert.equal(
+    applyHtmlReplacements(source, [
+      { start: script.startOffset, end: script.endOffset, content: '<script>safe</script>' },
+      { start: style.startOffset, end: style.endOffset, content: '' },
+    ]),
+    'prefix <script>safe</script> middle  suffix',
+  );
+  assert.throws(
+    () => applyHtmlReplacements(source, [
+      { start: 0, end: 10, content: '' },
+      { start: 5, end: 15, content: '' },
+    ]),
+    /Overlapping HTML replacement ranges/,
+  );
+  assert.throws(
+    () => applyHtmlReplacements(source, [{ start: -1, end: 2, content: '' }]),
+    /Invalid HTML replacement range/,
+  );
 });
 
 test('reviewed catalog blocks become same-origin assets and unknown blocks fail closed', () => {

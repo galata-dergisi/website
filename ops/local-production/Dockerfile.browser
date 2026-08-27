@@ -9,6 +9,7 @@ ENV CHROME_BIN=/usr/bin/chromium-browser \
 
 WORKDIR /app
 COPY --chown=node:node scripts/test-csp-browser.mjs /app/test-csp-browser.mjs
+COPY --chown=node:node scripts/lib/chrome-devtools-launcher.mjs /app/lib/chrome-devtools-launcher.mjs
 
 USER node
 

@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
+
+import { launchDevToolsBrowser } from './lib/chrome-devtools-launcher.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const enginePath = path.join(repoRoot, 'client/lib/page-turn.mjs');
@@ -129,20 +127,6 @@ function traceState(state) {
   };
 }
 
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean);
-  const chrome = candidates.find((candidate) => existsSync(candidate));
-  if (!chrome) throw new Error('Chrome not found; set CHROME_BIN to its executable path');
-  return chrome;
-}
-
 function startFixtureServer() {
   const moduleSource = readFileSync(enginePath);
   const mathSource = readFileSync(engineMathPath);
@@ -173,114 +157,6 @@ function startFixtureServer() {
       resolve({ server, url: `http://127.0.0.1:${address.port}/fixture` });
     });
   });
-}
-
-function launchChrome() {
-  const profile = mkdtempSync(path.join(tmpdir(), 'galata-page-turn-chrome-'));
-  const devToolsActivePortPath = path.join(profile, 'DevToolsActivePort');
-  const chrome = spawn(findChrome(), [
-    '--headless=new',
-    '--no-sandbox',
-    '--disable-gpu',
-    '--disable-dev-shm-usage',
-    '--disable-background-networking',
-    '--disable-default-apps',
-    '--disable-extensions',
-    '--disable-sync',
-    '--hide-scrollbars',
-    '--force-color-profile=srgb',
-    '--force-device-scale-factor=1',
-    '--font-render-hinting=none',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--remote-debugging-port=0',
-    `--user-data-dir=${profile}`,
-    '--window-size=1200,800',
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-  const websocketURL = new Promise((resolve, reject) => {
-    let stderr = '';
-    let settled = false;
-    let markerPoll;
-    let timeout;
-    const settle = (callback, value) => {
-      if (settled) return;
-      settled = true;
-      clearInterval(markerPoll);
-      clearTimeout(timeout);
-      callback(value);
-    };
-    const readDevToolsMarker = () => {
-      if (!existsSync(devToolsActivePortPath)) return;
-      const [port, endpointPath] = readFileSync(devToolsActivePortPath, 'utf8')
-        .trim()
-        .split(/\r?\n/);
-      if (/^\d+$/.test(port) && endpointPath?.startsWith('/')) {
-        settle(resolve, `ws://127.0.0.1:${port}${endpointPath}`);
-      }
-    };
-
-    chrome.stderr.setEncoding('utf8');
-    chrome.stderr.on('data', (chunk) => {
-      stderr = `${stderr}${chunk}`.slice(-20_000);
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (match) {
-        settle(resolve, match[1]);
-      }
-    });
-    chrome.once('error', (error) => {
-      settle(reject, new Error(`Chrome failed to start: ${error.message}\n${stderr}`));
-    });
-    chrome.once('exit', (code) => {
-      settle(reject, new Error(`Chrome exited before DevTools was ready (${code})\n${stderr}`));
-    });
-    markerPoll = setInterval(readDevToolsMarker, 25);
-    timeout = setTimeout(() => {
-      settle(reject, new Error(`Chrome DevTools endpoint timed out\n${stderr}`));
-    }, 30_000);
-    readDevToolsMarker();
-  });
-
-  return {
-    chrome,
-    profile,
-    websocketURL,
-    async close() {
-      if (chrome.exitCode === null) {
-        const exited = new Promise((resolve) => chrome.once('exit', resolve));
-        let killTimeout;
-        chrome.kill('SIGTERM');
-        await Promise.race([
-          exited,
-          new Promise((resolve) => {
-            killTimeout = setTimeout(resolve, 5_000);
-          }),
-        ]);
-        clearTimeout(killTimeout);
-        if (chrome.exitCode === null) {
-          chrome.kill('SIGKILL');
-          await exited;
-        }
-      }
-      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-    },
-  };
-}
-
-async function launchReadyChrome() {
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const browser = launchChrome();
-    try {
-      const websocketURL = await browser.websocketURL;
-      return { ...browser, websocketURL };
-    } catch (error) {
-      await browser.close();
-      if (attempt === 2) throw error;
-      process.stderr.write(`Chrome startup attempt ${attempt} failed; retrying.\n${error.message}\n`);
-    }
-  }
-  throw new Error('Chrome failed to start');
 }
 
 class DevToolsClient {
@@ -952,12 +828,22 @@ async function runAudioViewLifecycle(client, sessionId, url) {
   assert.equal(state.audioUnmountCalls, 2, 'final disposal must unmount the remounted view');
 }
 
-const fixture = await startFixtureServer();
+let fixture;
 let browser;
 let client;
 
 try {
-  browser = await launchReadyChrome();
+  fixture = await startFixtureServer();
+  browser = await launchDevToolsBrowser({
+    extraArguments: [
+      '--hide-scrollbars',
+      '--force-color-profile=srgb',
+      '--force-device-scale-factor=1',
+      '--font-render-hinting=none',
+    ],
+    profilePrefix: 'galata-page-turn-chrome-',
+    windowSize: '1200,800',
+  });
   client = await DevToolsClient.connect(browser.websocketURL);
   const { targetId } = await client.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await client.send('Target.attachToTarget', { targetId, flatten: true });
@@ -978,5 +864,5 @@ try {
 } finally {
   client?.close();
   await browser?.close();
-  await new Promise((resolve) => fixture.server.close(resolve));
+  if (fixture) await new Promise((resolve) => fixture.server.close(resolve));
 }
