@@ -181,6 +181,7 @@ function main(arguments_ = process.argv.slice(2)) {
     mediaMetadata: publicContent.mediaMetadataByPath,
     assetManifest,
     homepageArtwork: homepageArtworkSources(homepageImages),
+    rightsPagePath: path.join(REPO_ROOT, 'content/pages/telif-ve-kullanim.md'),
   });
   if (!renderer.getSsrRenderer()) {
     throw new Error('SSR bundle is missing. Run the Vite client build first.');
@@ -322,7 +323,12 @@ function main(arguments_ = process.argv.slice(2)) {
         if (!canonicalMetadata.has(canonicalPath)) {
           canonicalMetadata.set(
             canonicalPath,
-            renderer.createWorkMetadata(magazine, work, pages),
+            renderer.createWorkMetadata(
+              magazine,
+              work,
+              pages,
+              coverWork && coverWork.kind === 'issue-cover' ? coverWork : null,
+            ),
           );
         }
         const metadata = canonicalMetadata.get(canonicalPath);
@@ -390,6 +396,13 @@ function main(arguments_ = process.argv.slice(2)) {
   });
   legacyInlineAssets.assertComplete();
 
+  addRoute(
+    '/telif-ve-kullanim',
+    renderer.renderRightsPage(),
+    CONTENT_TYPES['.html'],
+  );
+  redirects['/telif-ve-kullanim/'] = '/telif-ve-kullanim';
+
   addRoute('/sitemap.xml', renderSitemap(
     baseUrl,
     publicContent.getSitemapData(),
@@ -420,6 +433,7 @@ function main(arguments_ = process.argv.slice(2)) {
   const smallAssets = [
     'assets/contributor-profile.css',
     'assets/contributor-profile.js',
+    'assets/static-page.css',
     'assets/legacy/sayi23-page21.css',
     'assets/legacy/sayi45-page34.css',
     'assets/legacy/sayi45-page34.js',

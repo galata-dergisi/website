@@ -339,6 +339,7 @@ class StaticPublicContent {
           mediaPath: media.mediaPath,
           anchorId: media.anchorId,
           technicalMetadata: media.technicalMetadata,
+          contributors: media.contributors.map((contributor) => ({ ...contributor })),
           magazineIndex: work.magazineIndex,
           startPage: work.startPage,
           publishDateText: magazine.publishDateText,

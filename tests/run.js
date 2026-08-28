@@ -28,6 +28,9 @@ const {
 } = require('../scripts/lib/content-decorators.js');
 const iconLibrary = require('../client/lib/font-awesome-icons.js');
 const SeoRenderer = require('../scripts/lib/seo-renderer.js');
+const {
+  renderMarkdownPageSource,
+} = require('../scripts/lib/static-markdown-page.js');
 const { renderAtomFeed } = require('../scripts/lib/atom-feed.js');
 const { renderSitemap } = require('../scripts/lib/sitemap.js');
 const {
@@ -3139,6 +3142,10 @@ test('generates a canonical-only sitemap without recitation fragments', () => {
   assert.match(sitemap, /https:\/\/galatadergisi\.org\/dergiler\/sayi12\/7/);
   assert.match(sitemap, /https:\/\/galatadergisi\.org\/dergiler\/sayi12\/22/);
   assert.match(sitemap, /https:\/\/galatadergisi\.org\/katkida-bulunanlar\/8-ada-yazar/);
+  assert.strictEqual(
+    (sitemap.match(/https:\/\/galatadergisi\.org\/telif-ve-kullanim/g) || []).length,
+    1,
+  );
   assert.doesNotMatch(sitemap, /https:\/\/galatadergisi\.org\/dergiler\/sayi12\/1/);
   assert.strictEqual(
     (sitemap.match(/https:\/\/galatadergisi\.org\/dergiler\/sayi12/g) || []).length,
@@ -3149,6 +3156,101 @@ test('generates a canonical-only sitemap without recitation fragments', () => {
   assert.strictEqual(
     (sitemap.match(/<lastmod>2026-01-01T00:00:00.000Z<\/lastmod>/g) || []).length,
     5,
+  );
+});
+
+test('publishes a crawlable rights page and organization-owned image metadata', () => {
+  const renderer = new SeoRenderer({
+    templatePath: path.join(__dirname, '../client/pages/homepage/index.html'),
+    ssrBundlePath: path.join(__dirname, '../build/ssr/does-not-exist.cjs'),
+    baseUrl: 'https://galatadergisi.org',
+  });
+  const rightsUrl = 'https://galatadergisi.org/telif-ve-kullanim';
+  const rightsHtml = renderer.renderRightsPage();
+  const rightsMarkdown = fs.readFileSync(
+    path.join(__dirname, '../content/pages/telif-ve-kullanim.md'),
+    'utf8',
+  );
+  const rightsData = structuredDataFromHtml(rightsHtml);
+  const logo = graphNode(
+    rightsData,
+    (node) => node['@type'] === 'ImageObject'
+      && node['@id'] === 'https://galatadergisi.org/#logo',
+  );
+
+  assert.match(
+    rightsHtml,
+    /<link rel="canonical" href="https:\/\/galatadergisi\.org\/telif-ve-kullanim" \/>/,
+  );
+  assert.match(rightsHtml, /href="\/assets\/static-page\.css"/);
+  assert.match(rightsHtml, /href="mailto:bilgi@galatadergisi\.org"/);
+  assert.match(rightsHtml, /<h2 id="dergi-icerigi-ve-gorseller">/);
+  assert.match(rightsHtml, /<h2 id="izin-talebi">/);
+  assert.match(rightsHtml, /tüm hakları saklı eserlerdir/);
+  assert.match(rightsHtml, /GNU\s+Genel Kamu Lisansı sürüm 3\.0 veya sonrası/);
+  assert.match(rightsMarkdown, /^---\n/);
+  assert.match(rightsMarkdown, /^## Dergi içeriği ve görseller$/m);
+  assert.doesNotMatch(rightsMarkdown, /<h2/);
+  assert.deepStrictEqual(logo.creator.map((creator) => creator.name), ['Galata Dergisi']);
+  assert.strictEqual(logo.creditText, 'Galata Dergisi');
+  assert.strictEqual(logo.copyrightNotice, '© Galata Dergisi');
+  assert.strictEqual(logo.license, rightsUrl);
+  assert.strictEqual(logo.acquireLicensePage, rightsUrl);
+
+  const issueMetadata = renderer.createIssueMetadata({
+    index: 8,
+    publishDateText: 'Ocak 2015',
+    publishDate: new Date('2015-01-01T00:00:00Z'),
+    thumbnailURL: '/images/sayi8/thumbnail.jpg',
+  }, null, [{
+    magazineIndex: 8,
+    startPage: 2,
+    endPage: 5,
+    title: 'Sayı 8 İçeriği',
+    type: 'prose',
+    kind: 'work',
+    contributors: [],
+    recitations: [],
+    media: [],
+  }]);
+  const coverImage = graphNode(
+    issueMetadata.structuredData,
+    (node) => node['@type'] === 'ImageObject'
+      && node.contentUrl === 'https://galatadergisi.org/images/sayi8/thumbnail.jpg',
+  );
+  assert.deepStrictEqual(
+    coverImage.creator.map((creator) => creator.name),
+    ['Galata Dergisi'],
+  );
+  assert.strictEqual(coverImage.copyrightNotice, '© Galata Dergisi');
+  assert.strictEqual(coverImage.license, rightsUrl);
+  assert.strictEqual(coverImage.acquireLicensePage, rightsUrl);
+});
+
+test('renders static Markdown pages safely and deterministically', () => {
+  const source = `---
+title: Deneme
+description: Açıklama
+lead: Giriş
+---
+
+## İzin talebi
+
+Bir [bağlantı](https://example.com) ve <script>alert(1)</script>.
+
+[Güvensiz](javascript:alert(1))`;
+  const first = renderMarkdownPageSource(source, 'test page');
+  const second = renderMarkdownPageSource(source, 'test page');
+
+  assert.deepStrictEqual(first, second);
+  assert.strictEqual(first.title, 'Deneme');
+  assert.match(first.html, /<h2 id="izin-talebi">İzin talebi<\/h2>/);
+  assert.match(first.html, /href="https:\/\/example\.com"/);
+  assert.match(first.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(first.html, /href="javascript:/);
+  assert.throws(
+    () => renderMarkdownPageSource('## Başlık', 'broken page'),
+    /must start with front matter/,
   );
 });
 
@@ -3258,6 +3360,15 @@ test('renders canonical metadata and privacy-safe contributor sections', () => {
       anchorId: 'gorsel-46-photograph',
       publishDateText: 'Ocak 2026',
       publishDate: new Date('2026-01-01T00:00:00Z'),
+      contributors: [{
+        id: 4,
+        displayName: 'Ada Yazar',
+        slug: 'ada-yazar',
+      }, {
+        id: 11,
+        displayName: 'Deniz Çizer',
+        slug: 'deniz-cizer',
+      }],
     }],
     recitations: [{
       id: 2,
@@ -3484,6 +3595,12 @@ test('renders canonical metadata and privacy-safe contributor sections', () => {
       && node.contentUrl === 'https://galatadergisi.org/images/sayi46/1.jpg',
   );
   assert(contributionImage);
+  assert.deepStrictEqual(
+    contributionImage.creator.map((creator) => creator.name),
+    ['Ada Yazar', 'Deniz Çizer'],
+  );
+  assert.strictEqual(contributionImage.creditText, 'Ada Yazar, Deniz Çizer');
+  assert.strictEqual(contributionImage.copyrightNotice, '© Ada Yazar, Deniz Çizer');
   assert.strictEqual(
     graphNode(
       profileStructuredData,
@@ -3894,6 +4011,20 @@ test('adds inline artwork and video entities to the parent work metadata', () =>
   }, {
     19: '<h1 class="mTitle">Bir Yazı</h1><p class="mNesir">Metin</p>',
     20: '<p class="mNesir">Devam.</p>',
+  }, {
+    magazineIndex: 44,
+    startPage: 1,
+    endPage: 1,
+    title: 'Sayı 44 Kapağı',
+    type: 'visual',
+    kind: 'issue-cover',
+    contributors: [{
+      id: 12,
+      displayName: 'Kapak Sanatçısı',
+      slug: 'kapak-sanatcisi',
+    }],
+    recitations: [],
+    media: [],
   });
   const artwork = graphNode(
     metadata.structuredData,
@@ -3969,6 +4100,20 @@ test('renders unique work titles and complete social article metadata', () => {
     media: [],
   }, {
     7: '<h1>Bir Eser</h1><p>Metin</p>',
+  }, {
+    magazineIndex: 12,
+    startPage: 1,
+    endPage: 1,
+    title: 'Sayı 12 Kapağı',
+    type: 'visual',
+    kind: 'issue-cover',
+    contributors: [{
+      id: 9,
+      displayName: 'Defne Hadiş',
+      slug: 'defne-hadis',
+    }],
+    recitations: [],
+    media: [],
   });
   const html = renderer.renderDocument({
     initialMagazines: [],
@@ -4014,6 +4159,14 @@ test('renders unique work titles and complete social article metadata', () => {
     html,
     /property="article:author" content="https:\/\/galatadergisi\.org\/katkida-bulunanlar\/8-ada-yazar"/,
   );
+  const primaryImage = graphNode(
+    metadata.structuredData,
+    (node) => node['@id']
+      === 'https://galatadergisi.org/dergiler/sayi12/7#primaryimage',
+  );
+  assert.strictEqual(primaryImage.caption, 'Galata Dergisi Sayı 12 kapağı');
+  assert.deepStrictEqual(primaryImage.creator.map((creator) => creator.name), ['Defne Hadiş']);
+  assert.strictEqual(primaryImage.copyrightNotice, '© Defne Hadiş');
   assert.match(
     html,
     /rel="alternate" type="application\/atom\+xml" title="Galata Dergisi" href="https:\/\/galatadergisi\.org\/feed\.xml"/,
@@ -4066,6 +4219,20 @@ test('models audio parents and multiple original creators without empty authors'
     media: [],
   }, {
     33: '<h1>Ses Makinesi</h1>',
+  }, {
+    magazineIndex: 12,
+    startPage: 1,
+    endPage: 1,
+    title: 'Sayı 12 Kapağı',
+    type: 'visual',
+    kind: 'issue-cover',
+    contributors: [{
+      id: 9,
+      displayName: 'Defne Hadiş',
+      slug: 'defne-hadis',
+    }],
+    recitations: [],
+    media: [],
   });
 
   assert.strictEqual(
@@ -4115,7 +4282,11 @@ test('uses a valid generic Open Graph type for visual works', () => {
     title: 'Bir Görsel',
     type: 'visual',
     kind: 'page-visual',
-    contributors: [],
+    contributors: [{
+      id: 8,
+      displayName: 'Ada Görsel',
+      slug: 'ada-gorsel',
+    }],
     recitations: [],
     media: [],
   }, {

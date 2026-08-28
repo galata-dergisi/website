@@ -29,6 +29,7 @@ const copyTargets = [
   ['client/legacy', 'public/assets/legacy'],
   ['client/pages/contributor/profile.css', 'public/assets/contributor-profile.css'],
   ['client/pages/contributor/profile.js', 'public/assets/contributor-profile.js'],
+  ['client/pages/static/page.css', 'public/assets/static-page.css'],
   ['client/pages/homepage/index.html', 'public/index.html'],
   ['client/pages/homepage/global.css', 'public/global.css'],
   ['client/service-worker.js', 'public/service-worker.js'],

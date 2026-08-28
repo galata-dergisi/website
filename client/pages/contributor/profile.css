@@ -72,7 +72,9 @@ a:focus-visible {
 }
 
 .site-nav {
-  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .site-nav a,

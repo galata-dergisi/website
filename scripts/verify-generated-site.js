@@ -486,11 +486,45 @@ try {
     });
 
   [
-    '/', '/magazines', '/feed.xml', '/sitemap.xml', '/robots.txt',
+    '/', '/telif-ve-kullanim', '/magazines', '/feed.xml', '/sitemap.xml', '/robots.txt',
     '/bundle.js', '/bundle.css',
   ].forEach((route) => assert(manifest.routes[route], `missing route ${route}`));
 
+  const rightsPath = '/telif-ve-kullanim';
+  const rightsUrl = `${expectedBaseUrl}${rightsPath}`;
+  const rightsPage = readRoute(rightsPath);
+  assert(
+    rightsPage.includes(`<link rel="canonical" href="${rightsUrl}" />`),
+    'rights page canonical missing',
+  );
+  assert(
+    rightsPage.includes('href="mailto:bilgi@galatadergisi.org"'),
+    'rights permission email missing',
+  );
+  assert(
+    rightsPage.includes('<h2 id="dergi-icerigi-ve-gorseller">'),
+    'rights Markdown headings were not rendered',
+  );
+  assert(!rightsPage.includes('## Dergi içeriği'), 'rights page contains raw Markdown');
+  assert(rightsPage.includes('tüm hakları saklı eserlerdir'), 'rights terms missing');
+  assert(
+    rightsPage.includes('/assets/static-page.css'),
+    'rights page stylesheet missing',
+  );
+  assert(
+    manifest.redirects['/telif-ve-kullanim/'] === rightsPath,
+    'rights trailing-slash redirect missing',
+  );
+
   const homepage = readRoute('/');
+  assert(homepage.includes(`href="${rightsPath}"`), 'homepage rights link missing');
+  const firstProfileRoute = Object.keys(manifest.routes).find(
+    (route) => /^\/katkida-bulunanlar\/\d+-[^/]+$/.test(route),
+  );
+  assert(
+    firstProfileRoute && readRoute(firstProfileRoute).includes(`href="${rightsPath}"`),
+    'contributor rights link missing',
+  );
   Object.entries(manifest.routes)
     .filter(([, entry]) => entry.contentType.startsWith('text/html'))
     .forEach(([route]) => {
@@ -638,10 +672,11 @@ try {
 
   const indexableRoutes = Object.keys(manifest.routes).filter((route) => (
     route === '/'
+    || route === '/telif-ve-kullanim'
     || /^\/dergiler\/sayi\d+(?:\/\d+)?$/.test(route)
     || /^\/katkida-bulunanlar\/\d+-[^/]+$/.test(route)
   ));
-  assert(indexableRoutes.length === 2002, 'indexable HTML baseline changed');
+  assert(indexableRoutes.length === 2003, 'indexable HTML baseline changed');
 
   const canonicalSeo = new Map();
   const canonicalGraphs = new Map();
@@ -680,7 +715,7 @@ try {
       );
     }
   });
-  assert(canonicalSeo.size === 724, 'canonical identity baseline changed');
+  assert(canonicalSeo.size === 725, 'canonical identity baseline changed');
 
   const homeSeoDocument = seoDocument(readRoute('/'), '/');
   let generatedSeoDocuments = 0;
@@ -731,6 +766,21 @@ try {
     assert(document['@context'] === 'https://schema.org', `${canonical} context mismatch`);
     assert(Array.isArray(document['@graph']), `${canonical} graph missing`);
     document['@graph'].forEach((node) => {
+      if (node && node['@type'] === 'ImageObject') {
+        assert(node.contentUrl, `${canonical} image contentUrl missing`);
+        assert(
+          Array.isArray(node.creator) && node.creator.length > 0,
+          `${canonical} image creator missing`,
+        );
+        assert(node.creditText, `${canonical} image creditText missing`);
+        assert(node.copyrightNotice, `${canonical} image copyrightNotice missing`);
+        for (const property of ['license', 'acquireLicensePage']) {
+          assert(node[property] === rightsUrl, `${canonical} image ${property} mismatch`);
+          const target = new URL(node[property]);
+          assert(target.origin === new URL(expectedBaseUrl).origin, `${canonical} image ${property} origin mismatch`);
+          assert(manifest.routes[target.pathname], `${canonical} image ${property} route missing`);
+        }
+      }
       if (node && node['@id'] && !graphNodes.has(node['@id'])) {
         graphNodes.set(node['@id'], node);
       }
@@ -822,9 +872,52 @@ try {
   assert(issueThirtySeven.datePublished === '2020-05-31T21:00:00.000Z', 'issue 37 date mismatch');
   assert(issueFortySeven.datePublished === '2022-02-28T21:00:00.000Z', 'issue 47 date mismatch');
 
+  const affectedWorkGraph = structuredData(
+    readRoute('/dergiler/sayi24/33'),
+    '/dergiler/sayi24/33',
+  );
+  const affectedWork = affectedWorkGraph['@graph'].find(
+    (node) => node['@id'] === `${expectedBaseUrl}/dergiler/sayi24/31#work`,
+  );
+  const affectedCover = affectedWorkGraph['@graph'].find(
+    (node) => node['@id'] === `${expectedBaseUrl}/dergiler/sayi24/31#primaryimage`,
+  );
+  assert(affectedWork.author[0].name === 'A16', 'affected article author changed');
+  nodeAssert.deepEqual(
+    affectedCover.creator.map((creator) => creator.name),
+    ['Defne Hadiş'],
+    'affected fallback cover creator mismatch',
+  );
+  assert(
+    affectedCover.caption === 'Galata Dergisi Sayı 24 kapağı',
+    'affected fallback cover caption mismatch',
+  );
+  assert(
+    affectedCover.copyrightNotice === '© Defne Hadiş',
+    'affected fallback cover copyright mismatch',
+  );
+
+  for (const issue of [8, 9, 10, 11]) {
+    const image = graphNodes.get(`${expectedBaseUrl}/dergiler/sayi${issue}#primaryimage`);
+    assert(image, `organization-owned issue ${issue} image missing`);
+    assert(image.creator[0].name === 'Galata Dergisi', `issue ${issue} owner mismatch`);
+    assert(image.copyrightNotice === '© Galata Dergisi', `issue ${issue} copyright mismatch`);
+  }
+  const logo = graphNodes.get(`${expectedBaseUrl}/#logo`);
+  assert(logo.creator[0].name === 'Galata Dergisi', 'logo owner mismatch');
+  assert(logo.copyrightNotice === '© Galata Dergisi', 'logo copyright mismatch');
+
   const sitemap = readRoute('/sitemap.xml');
   assert(sitemap.includes(`${expectedBaseUrl}/dergiler/sayi47`), 'sitemap issue missing');
   assert(sitemap.includes(`${expectedBaseUrl}/katkida-bulunanlar/`), 'sitemap contributor missing');
+  assert(
+    (sitemap.match(new RegExp(`${rightsUrl}`, 'g')) || []).length === 1,
+    'sitemap rights route missing or duplicated',
+  );
+  assert(
+    sitemap.includes(`<url><loc>${rightsUrl}</loc></url>`),
+    'sitemap rights route must omit an invented modification date',
+  );
   assert(
     sitemap.includes('<lastmod>2022-02-28T21:00:00.000Z</lastmod>'),
     'sitemap latest content-change date missing',

@@ -1,0 +1,97 @@
+:root {
+  --link-color: #5f763d;
+  --meta-color: #626262;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #d9d9d9;
+  color: #333;
+}
+
+body {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  line-height: 1.65;
+}
+
+main {
+  box-sizing: border-box;
+  width: min(760px, calc(100% - 32px));
+  min-height: calc(100vh - 80px);
+  margin: 40px auto;
+  padding: 44px;
+  background: #fff;
+  box-shadow: 0 0 20px #bbb;
+}
+
+h1 {
+  margin: 26px 0 6px;
+  text-align: center;
+}
+
+h2 {
+  margin: 38px 0 8px;
+  border-bottom: 1px solid #aaa;
+}
+
+p,
+ul {
+  margin: 12px 0;
+}
+
+.lead {
+  margin: 0;
+  color: var(--meta-color);
+  text-align: center;
+  font: 14px/1.5 ui-sans-serif, system-ui, sans-serif;
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration-thickness: 2px;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--link-color);
+  outline-offset: 3px;
+}
+
+.site-nav a,
+.page-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.page-footer {
+  margin-top: 40px;
+  border-top: 1px solid #ddd;
+  padding-top: 18px;
+  font: 600 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (max-width: 600px) {
+  main {
+    width: calc(100% - 24px);
+    min-height: calc(100svh - 24px);
+    margin: 12px auto;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  .lead,
+  .page-footer {
+    font-size: 14px;
+  }
+}

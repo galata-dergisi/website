@@ -58,6 +58,9 @@ function mediaKindLabel(kind) {
   }[kind] || 'Görsel';
 }
 
+const RIGHTS_PATH = '/telif-ve-kullanim';
+const ORGANIZATION_OWNED_COVER_ISSUES = new Set([8, 9, 10, 11]);
+
 class StructuredDataBuilder {
   constructor(baseUrl, mediaMetadata = new Map()) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
@@ -66,15 +69,43 @@ class StructuredDataBuilder {
     this.websiteId = `${this.baseUrl}/#website`;
     this.periodicalId = `${this.baseUrl}/#periodical`;
     this.logoId = `${this.baseUrl}/#logo`;
+    this.rightsUrl = absoluteUrl(this.baseUrl, RIGHTS_PATH);
   }
 
   media(pathname) {
     return this.mediaMetadata.get(pathname) || {};
   }
 
+  organizationReference() {
+    return {
+      '@type': 'Organization',
+      '@id': this.organizationId,
+      name: 'Galata Dergisi',
+      url: this.baseUrl,
+    };
+  }
+
+  issueCoverCreators(issue, coverWork) {
+    const creators = coverWork
+      ? coverWork.contributors.map((contributor) => this.personReference(contributor))
+      : [];
+    if (creators.length) return creators;
+    if (ORGANIZATION_OWNED_COVER_ISSUES.has(Number(issue.index))) {
+      return [this.organizationReference()];
+    }
+    throw new Error(`Issue ${issue.index} cover requires a reviewed copyright owner`);
+  }
+
   imageNode(pathname, id, caption, creators = []) {
     if (!pathname) return null;
+    if (!creators.length) {
+      throw new Error(`Image ${pathname} requires a reviewed copyright owner`);
+    }
     const technical = this.media(pathname);
+    const creditText = creators.map((creator) => creator.name).filter(Boolean).join(', ');
+    if (!creditText) {
+      throw new Error(`Image ${pathname} requires a named copyright owner`);
+    }
     return defined({
       '@type': 'ImageObject',
       '@id': id,
@@ -84,10 +115,11 @@ class StructuredDataBuilder {
       height: technical.height,
       encodingFormat: technical.encodingFormat,
       caption,
-      creator: creators.length ? creators : undefined,
-      creditText: creators.length
-        ? creators.map((creator) => creator.name).filter(Boolean).join(', ')
-        : undefined,
+      creator: creators,
+      creditText,
+      copyrightNotice: `© ${creditText}`,
+      license: this.rightsUrl,
+      acquireLicensePage: this.rightsUrl,
     });
   }
 
@@ -104,17 +136,16 @@ class StructuredDataBuilder {
   }
 
   commonGraph() {
+    const organization = this.organizationReference();
     const logo = this.imageNode(
       '/images/header-logo.jpg',
       this.logoId,
       'Galata Dergisi',
+      [organization],
     );
     return [
       {
-        '@type': 'Organization',
-        '@id': this.organizationId,
-        name: 'Galata Dergisi',
-        url: this.baseUrl,
+        ...organization,
         logo: { '@id': this.logoId },
         sameAs: [
           'https://twitter.com/GalataDergisi',
@@ -324,9 +355,7 @@ class StructuredDataBuilder {
     const issueId = `${canonical}#issue`;
     const coverId = `${canonical}#work`;
     const imageId = `${canonical}#primaryimage`;
-    const coverCreators = coverWork
-      ? coverWork.contributors.map((contributor) => this.personReference(contributor))
-      : [];
+    const coverCreators = this.issueCoverCreators(issue, coverWork);
     const coverMedia = coverWork
       ? (coverWork.media || []).flatMap(
         (media) => this.mediaNodes(issue, media, coverId),
@@ -405,7 +434,7 @@ class StructuredDataBuilder {
     };
   }
 
-  work(issue, work, description, primaryImage, wordCount) {
+  work(issue, work, description, primaryImage, wordCount, coverWork = null) {
     const canonical = absoluteUrl(this.baseUrl, workPath(work));
     const pageId = `${canonical}#webpage`;
     const workId = `${canonical}#work`;
@@ -413,6 +442,12 @@ class StructuredDataBuilder {
     const creators = work.contributors.map(
       (contributor) => this.personReference(contributor),
     );
+    const primaryImageCreators = primaryImage && primaryImage.usesIssueCover
+      ? this.issueCoverCreators(issue, coverWork)
+      : creators;
+    const primaryImageCaption = primaryImage && primaryImage.usesIssueCover
+      ? `Galata Dergisi Sayı ${issue.index} kapağı`
+      : work.title;
     const type = typeForWork(work);
     const workNode = defined({
       '@type': type,
@@ -482,7 +517,12 @@ class StructuredDataBuilder {
         this.issueReference(issue),
         workNode,
         imageId
-          ? this.imageNode(primaryImage, imageId, work.title, creators)
+          ? this.imageNode(
+            primaryImage.pathname,
+            imageId,
+            primaryImageCaption,
+            primaryImageCreators,
+          )
           : null,
         ...audioNodes,
         ...mediaNodes,
@@ -523,10 +563,7 @@ class StructuredDataBuilder {
           index: media.magazineIndex,
           publishDate: media.publishDate,
         };
-        return this.mediaNodes(issue, {
-          ...media,
-          contributors: [profile],
-        }, `${absoluteUrl(
+        return this.mediaNodes(issue, media, `${absoluteUrl(
           this.baseUrl,
           `/dergiler/sayi${media.magazineIndex}/${media.startPage}`,
         )}#work`);
@@ -578,7 +615,35 @@ class StructuredDataBuilder {
       ].filter(Boolean),
     };
   }
+
+  rights(description, title = 'Telif ve Kullanım') {
+    const canonical = absoluteUrl(this.baseUrl, RIGHTS_PATH);
+    const pageId = `${canonical}#webpage`;
+    return {
+      '@context': 'https://schema.org',
+      '@graph': [
+        ...this.commonGraph(),
+        {
+          '@type': 'WebPage',
+          '@id': pageId,
+          url: canonical,
+          name: `${title} | Galata Dergisi`,
+          description,
+          inLanguage: 'tr',
+          isPartOf: { '@id': this.websiteId },
+          publisher: { '@id': this.organizationId },
+          primaryImageOfPage: { '@id': this.logoId },
+          breadcrumb: { '@id': `${canonical}#breadcrumb` },
+        },
+        this.breadcrumbNode(canonical, [
+          { name: 'Galata Dergisi', pathname: '/' },
+          { name: title, pathname: RIGHTS_PATH },
+        ]),
+      ],
+    };
+  }
 }
 
 module.exports = StructuredDataBuilder;
+module.exports.RIGHTS_PATH = RIGHTS_PATH;
 module.exports.typeForWork = typeForWork;

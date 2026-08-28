@@ -14,6 +14,9 @@ function renderSitemap(baseUrl, data) {
   const urls = [{
     pathname: '/',
     lastModified: newestPublication,
+  }, {
+    pathname: '/telif-ve-kullanim',
+    lastModified: null,
   }];
   data.magazines.forEach((magazine) => {
     urls.push({

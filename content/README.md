@@ -20,3 +20,7 @@ media, so builds never probe media or depend on `ffprobe`.
 A protected private-content archive may be supplied explicitly to the release
 scanner, but it is not part of this directory. It remains offline and must not
 be deployed or embedded.
+
+Repository-authored static page copy lives under `pages/`. The site generator
+converts these Markdown files to sanitized HTML during the build; their small
+front matter block supplies the page title, description, and lead.

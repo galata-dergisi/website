@@ -59,6 +59,8 @@
     <GithubIcon /> galata-dergisi/website
   </a>
   <br />
+  <a href="/telif-ve-kullanim">Telif ve kullanım</a>
+  <br />
   &copy; 2020 Galata Dergisi. Dergilerdeki hiçbir içerik izinsiz kopyalanamaz.
   <!--googleon: snippet-->
 </footer>

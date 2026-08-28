@@ -49,6 +49,10 @@ database.
   keep their physical route while resolving to the work-start metadata.
 - `/katkida-bulunanlar/{id}-{slug}` is a stable contributor profile; an old
   slug redirects by contributor ID.
+- `/telif-ve-kullanim` publishes the governing editorial-media terms and the
+  permission-request workflow used by image-license structured data. Its
+  editable source is `content/pages/telif-ve-kullanim.md`; the deterministic
+  site build converts that Markdown to HTML.
 - `/feed.xml` is an Atom 1.0 feed containing every canonical non-cover work,
   ordered by reviewed publication time, issue, and start page. It is served as
   `application/atom+xml`, supports deterministic gzip, and is intentionally
@@ -84,7 +88,10 @@ database.
   modification data exists.
 - Reader pages intentionally do not publish a viewport tag. Existing titles
   and social-card images are not shortened or replaced by the SEO generator.
-- Rights, licenses, accessibility claims, personal social identities,
+- Every `ImageObject` publishes the reviewed `/telif-ve-kullanim` license and
+  acquisition URL, credited visual creators as copyright owners, and explicit
+  Galata Dergisi ownership for the logo and the otherwise uncredited Sayı 8–11
+  covers. Other rights, accessibility claims, personal social identities,
   transcripts, keywords, ratings, search actions, and unsupported rich-result
   types remain absent without separately reviewed public data.
 

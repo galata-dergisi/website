@@ -17,6 +17,7 @@ test('Vite preserves the browser, SSR, and copied-asset contracts', () => {
   const requiredFiles = [
     'public/assets/contributor-profile.css',
     'public/assets/contributor-profile.js',
+    'public/assets/static-page.css',
     'public/assets/legacy/sayi23-page21.css',
     'public/assets/legacy/sayi45-page34.css',
     'public/assets/legacy/sayi45-page34.js',

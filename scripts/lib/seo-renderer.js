@@ -15,6 +15,8 @@ const {
   stripHtml,
 } = require('./seo-utils.js');
 const StructuredDataBuilder = require('./seo-structured-data.js');
+const { RIGHTS_PATH } = StructuredDataBuilder;
+const { renderMarkdownPage } = require('./static-markdown-page.js');
 const {
   applyShellAssetVersions,
   versionShellAssetPath,
@@ -469,6 +471,10 @@ class SeoRenderer {
     this.mediaMetadata = params.mediaMetadata || new Map();
     this.assetManifest = params.assetManifest || null;
     this.homepageArtwork = params.homepageArtwork || {};
+    this.rightsPagePath = params.rightsPagePath || path.resolve(
+      __dirname,
+      '../../content/pages/telif-ve-kullanim.md',
+    );
     this.structuredData = new StructuredDataBuilder(
       this.baseUrl,
       this.mediaMetadata,
@@ -674,7 +680,7 @@ class SeoRenderer {
     ].join('\n    ');
   }
 
-  createWorkMetadata(issue, work, pages) {
+  createWorkMetadata(issue, work, pages, coverWork = null) {
     const canonicalPath = workPath(work);
     const authorText = work.contributors.map((contributor) => contributor.displayName).join(', ');
     let workHtml = '';
@@ -685,6 +691,10 @@ class SeoRenderer {
       ? extractPrimaryImagePath(workHtml)
       : null;
     const metadataImage = artworkImage || issue.thumbnailURL;
+    const structuredImage = metadataImage ? {
+      pathname: metadataImage,
+      usesIssueCover: !artworkImage,
+    } : null;
     const excludedValues = [
       work.title,
       ...work.contributors.map((contributor) => contributor.displayName),
@@ -696,8 +706,9 @@ class SeoRenderer {
       { ...issue, publishDate: publishedTime },
       work,
       description,
-      metadataImage,
+      structuredImage,
       meaningfulWordCount(workHtml, excludedValues),
+      coverWork,
     );
 
     return {
@@ -720,6 +731,50 @@ class SeoRenderer {
         : [],
       structuredData,
     };
+  }
+
+  renderRightsPage() {
+    const page = renderMarkdownPage(this.rightsPagePath);
+    const metadata = {
+      title: `${page.title} | Galata Dergisi`,
+      description: page.description,
+      canonicalPath: RIGHTS_PATH,
+      image: '/images/header-logo.jpg',
+      imageAlt: 'Galata Dergisi',
+      ogType: 'website',
+      structuredData: this.structuredData.rights(page.description, page.title),
+    };
+    const head = this.renderSeoHead(this.createSeoDocument(metadata));
+    const document_ = `<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${head}
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <link rel="stylesheet" href="/assets/static-page.css" />
+  </head>
+  <body>
+    <main class="static-page">
+      <nav class="site-nav" aria-label="Ana sayfaya dönüş">
+        <a href="/">← Galata Dergisi</a>
+      </nav>
+      <header>
+        <h1>${escapeHtml(page.title)}</h1>
+        <p class="lead">${escapeHtml(page.lead)}</p>
+      </header>
+      <div class="page-content">
+        ${page.html.trim()}
+      </div>
+      <footer class="page-footer">
+        <a href="/">← Galata Dergisi’ne dön</a>
+      </footer>
+    </main>
+  </body>
+</html>`;
+    return this.assetManifest
+      ? applyShellAssetVersions(document_, this.assetManifest)
+      : document_;
   }
 
   createIssueMetadata(issue, coverWork = null, works = [], pages = {}) {
@@ -877,6 +932,7 @@ class SeoRenderer {
     const profileFooter = longProfile ? `
       <footer class="profile-footer">
         <a href="/">← Galata Dergisi</a>
+        <a href="${RIGHTS_PATH}">Telif ve kullanım</a>
         <a href="#sayfa-basi">Başa dön ↑</a>
       </footer>` : '';
     const structuredData = this.structuredData.profile({
@@ -917,7 +973,10 @@ class SeoRenderer {
   <body>
     <main id="sayfa-basi" class="profile-${longProfile ? 'long' : 'compact'}">
       <header>
-        <nav class="site-nav" aria-label="Ana sayfaya dönüş"><a href="/">← Galata Dergisi</a></nav>
+        <nav class="site-nav" aria-label="Site bağlantıları">
+          <a href="/">← Galata Dergisi</a>
+          <a href="${RIGHTS_PATH}">Telif ve kullanım</a>
+        </nav>
         <h1>${escapeHtml(profile.displayName)}</h1>
         <p class="profile-summary">${escapeHtml(view.summary)}</p>
         <p class="issue-range">${escapeHtml(view.issueRangeLabel)}</p>${sectionNavigation}
